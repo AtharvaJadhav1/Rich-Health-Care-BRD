@@ -1,0 +1,116 @@
+import { Member } from "@prisma/client";
+import { prisma } from "./db";
+import { utcDateKey } from "./dates";
+import { leftoverFromSnapshot } from "./matching";
+
+export async function placeUnderSponsor(sponsorId: string) {
+  const queue = [sponsorId];
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    const children = await prisma.member.findMany({
+      where: { parentId },
+      orderBy: { createdAt: "asc" },
+    });
+    const left = children.find((c) => c.position === "LEFT");
+    const right = children.find((c) => c.position === "RIGHT");
+    if (!left) return { parentId, position: "LEFT" as const };
+    if (!right) return { parentId, position: "RIGHT" as const };
+    queue.push(left.id, right.id);
+  }
+  throw new Error("Could not place member in binary tree.");
+}
+
+export async function getOrCreateVolume(memberId: string, date = utcDateKey()) {
+  const existing = await prisma.binaryVolume.findUnique({
+    where: { memberId_date: { memberId, date } },
+  });
+  if (existing) return existing;
+  const previous = await prisma.binaryVolume.findFirst({
+    where: { memberId, date: { lt: date } },
+    orderBy: { date: "desc" },
+  });
+  const carry = previous
+    ? leftoverFromSnapshot(previous)
+    : { leftoverLeft: 0, leftoverRight: 0 };
+  return prisma.binaryVolume.create({
+    data: {
+      memberId,
+      date,
+      carryLeft: carry.leftoverLeft,
+      carryRight: carry.leftoverRight,
+    },
+  });
+}
+
+export async function countActivationTowardUpline(member: Member) {
+  if (member.status !== "ACTIVE") return;
+  let currentId = member.id;
+  let currentPosition = member.position;
+  const date = utcDateKey();
+  while (true) {
+    const current = await prisma.member.findUnique({ where: { id: currentId } });
+    if (!current?.parentId || !currentPosition) break;
+    const parentId = current.parentId;
+    await getOrCreateVolume(parentId, date);
+    if (currentPosition === "LEFT") {
+      await prisma.binaryVolume.update({
+        where: { memberId_date: { memberId: parentId, date } },
+        data: { leftCount: { increment: 1 } },
+      });
+    } else {
+      await prisma.binaryVolume.update({
+        where: { memberId_date: { memberId: parentId, date } },
+        data: { rightCount: { increment: 1 } },
+      });
+    }
+    const parent = await prisma.member.findUnique({ where: { id: parentId } });
+    currentId = parentId;
+    currentPosition = parent?.position ?? null;
+  }
+}
+
+export type TreeNode = {
+  id: string;
+  name: string;
+  memberCode: string;
+  position: string | null;
+  status: string;
+  rank: string | null;
+  left: TreeNode | null;
+  right: TreeNode | null;
+};
+
+export async function fetchSubtree(rootId: string, depth = 3): Promise<TreeNode | null> {
+  const member = await prisma.member.findUnique({ where: { id: rootId } });
+  if (!member) return null;
+  async function walk(id: string, remaining: number): Promise<TreeNode | null> {
+    const node = await prisma.member.findUnique({ where: { id } });
+    if (!node) return null;
+    const children =
+      remaining > 0
+        ? await prisma.member.findMany({ where: { parentId: id } })
+        : [];
+    const leftChild = children.find((c) => c.position === "LEFT");
+    const rightChild = children.find((c) => c.position === "RIGHT");
+    return {
+      id: node.id,
+      name: node.name,
+      memberCode: node.memberCode,
+      position: node.position,
+      status: node.status,
+      rank: node.rank,
+      left: leftChild && remaining > 0 ? await walk(leftChild.id, remaining - 1) : null,
+      right: rightChild && remaining > 0 ? await walk(rightChild.id, remaining - 1) : null,
+    };
+  }
+  return walk(rootId, depth);
+}
+
+export async function nextMemberCode() {
+  const last = await prisma.member.findFirst({
+    where: { memberCode: { startsWith: "RHC" } },
+    orderBy: { memberCode: "desc" },
+  });
+  const n = last ? Number(last.memberCode.replace("RHC", "")) + 1 : 1;
+  return `RHC${String(n).padStart(4, "0")}`;
+}

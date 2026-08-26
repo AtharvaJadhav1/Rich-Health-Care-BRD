@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id          String       @id @default(cuid())
+  name        String
+  phone       String       @unique
+  password    String
+  memberCode  String       @unique
+  sponsorId   String?
+  sponsor     Member?      @relation("Sponsor", fields: [sponsorId], references: [id])
+  referrals   Member[]     @relation("Sponsor")
+  parentId    String?
+  parent      Member?      @relation("BinaryTree", fields: [parentId], references: [id])
+  children    Member[]     @relation("BinaryTree")
+  position    String?
+  role        String       @default("MEMBER")
+  rank        String?
+  status      String       @default("PENDING_PAYMENT")
+  activatedAt DateTime?
+  wallet      Wallet?
+  volumes     BinaryVolume[]
+  orders      Order[]
+  payments    PaymentSubmission[]
+  createdAt   DateTime     @default(now())
+}
+
+model PaymentSubmission {
+  id            String   @id @default(cuid())
+  memberId      String
+  member        Member   @relation(fields: [memberId], references: [id])
+  purpose       String
+  orderId       String?
+  amount        Int
+  referenceNo   String
+  screenshotUrl String?
+  status        String   @default("PENDING")
+  adminNote     String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model Wallet {
+  id       String        @id @default(cuid())
+  memberId String        @unique
+  member   Member        @relation(fields: [memberId], references: [id])
+  balance  Int           @default(0)
+  ledger   LedgerEntry[]
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+  type        String
+  amount      Int
+  grossAmount Int?
+  gstCut      Int?
+  adminCut    Int?
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+model BinaryVolume {
+  id           String   @id @default(cuid())
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id])
+  date         String
+  leftCount    Int      @default(0)
+  rightCount   Int      @default(0)
+  carryLeft    Int      @default(0)
+  carryRight   Int      @default(0)
+  pairsMatched Int      @default(0)
+  payout       Int      @default(0)
+  matched      Boolean  @default(false)
+
+  @@unique([memberId, date])
+}
+
+model MatchingRun {
+  id                String   @id @default(cuid())
+  date              String   @unique
+  ranAt             DateTime @default(now())
+  membersProcessed  Int
+  pairsTotal        Int
+  payoutTotal       Int
+}
+
+model Product {
+  id       String  @id @default(cuid())
+  name     String
+  dp       Int
+  mrp      Int
+  stock    Int     @default(0)
+  active   Boolean @default(true)
+  imageUrl String?
+  orders   Order[]
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+}
+
+model PlanConfig {
+  id                  String @id
+  joiningAmount       Int
+  pairValue           Int
+  dailyPairCap        Int
+  gstPercent          Int
+  adminCutPercent     Int
+  retailIncomePerUnit Int
+}
