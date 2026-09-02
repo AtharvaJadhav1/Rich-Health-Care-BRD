@@ -1,14 +1,38 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { inr } from "@/lib/money";
 
 const steps = [
-  { title: "Join with a sponsor", body: "Register with an active distributor code. Your binary slot is reserved immediately." },
-  { title: "Pay ₹999 manually", body: "Transfer the joining amount and submit your UTR. Nothing counts until admin approval." },
+  { title: "Join with PAN", body: "Register with your name, phone, and PAN. We issue your Member ID and password." },
+  { title: "Pay ₹999 or use a PIN", body: "Submit a UTR, or consume a PIN. Nothing counts until that step completes." },
   { title: "Build both legs", body: "New active members spill over left-first. Matching pairs at ₹225 net, 10 pairs a day." },
 ];
 
-export default function HomePage() {
+type Product = {
+  id: string;
+  name: string;
+  description: string | null;
+  dp: number;
+  mrp: number;
+  imageUrl: string | null;
+};
+
+const API_ORIGIN = process.env.API_ORIGIN ?? `http://127.0.0.1:${process.env.API_PORT ?? "43124"}`;
+
+async function loadProducts(): Promise<Product[]> {
+  try {
+    const res = await fetch(`${API_ORIGIN}/products`, { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as Product[];
+  } catch {
+    return [];
+  }
+}
+
+export default async function HomePage() {
+  const products = await loadProducts();
+
   return (
     <div>
       <section className="border-b bg-[radial-gradient(circle_at_top,_oklch(0.93_0.05_145),_transparent_55%)]">
@@ -39,7 +63,7 @@ export default function HomePage() {
               <CardTitle>Plan snapshot</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm">
-              <Row k="Joining amount" v="₹999 (manual UTR)" />
+              <Row k="Joining amount" v="₹999 (UTR or PIN)" />
               <Row k="Distributor price" v="₹999" />
               <Row k="MRP" v="₹1,499" />
               <Row k="Retail income" v="₹500 per unit, after approval" />
@@ -51,7 +75,39 @@ export default function HomePage() {
           </Card>
         </div>
       </section>
-      <section className="mx-auto grid max-w-6xl gap-6 px-4 py-16 md:grid-cols-3">
+      <section className="mx-auto max-w-6xl space-y-6 px-4 py-16">
+        <div>
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Products</p>
+          <h2 className="font-heading mt-2 text-3xl font-semibold">Catalog at distributor price</h2>
+          <p className="mt-2 max-w-2xl text-muted-foreground">
+            Names, details, DP and MRP come from the live catalog. Add product photos in Admin when the
+            client supplies assets.
+          </p>
+        </div>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {products.map((product) => (
+            <Card key={product.id}>
+              {product.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={product.imageUrl} alt="" className="h-40 w-full rounded-t-xl object-cover" />
+              ) : (
+                <div className="flex h-40 items-center justify-center rounded-t-xl bg-muted text-sm text-muted-foreground">
+                  Photo pending
+                </div>
+              )}
+              <CardHeader>
+                <CardTitle className="text-lg">{product.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-muted-foreground">{product.description}</p>
+                <p className="text-sm text-muted-foreground line-through">{inr(product.mrp)} MRP</p>
+                <p className="text-xl font-semibold">{inr(product.dp)} DP</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+      <section className="mx-auto grid max-w-6xl gap-6 px-4 pb-16 md:grid-cols-3">
         {steps.map((step, i) => (
           <Card key={step.title}>
             <CardHeader>

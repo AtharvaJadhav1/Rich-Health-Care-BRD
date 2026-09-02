@@ -42,6 +42,17 @@ export async function getOrCreateVolume(memberId: string, date = utcDateKey()) {
   });
 }
 
+export async function activateMember(memberId: string) {
+  const member = await prisma.member.findUniqueOrThrow({ where: { id: memberId } });
+  if (member.status === "ACTIVE") return member;
+  const updated = await prisma.member.update({
+    where: { id: memberId },
+    data: { status: "ACTIVE", activatedAt: new Date() },
+  });
+  await countActivationTowardUpline(updated);
+  return updated;
+}
+
 export async function countActivationTowardUpline(member: Member) {
   if (member.status !== "ACTIVE") return;
   let currentId = member.id;

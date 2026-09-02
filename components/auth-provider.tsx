@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api, getToken, TOKEN_KEY } from "@/lib/api";
+import { api, clearToken, getToken, persistToken } from "@/lib/api";
 
 export type Member = {
   id: string;
@@ -11,21 +11,28 @@ export type Member = {
   role: string;
   rank: string | null;
   status: string;
+  kycStatus: string;
+  panNumber?: string;
+  photoUrl: string | null;
+  address: string | null;
   position: string | null;
   activatedAt: string | null;
+  createdAt: string;
 };
+
+export type IssuedCredentials = { memberCode: string; password: string };
 
 type AuthState = {
   token: string | null;
   member: Member | null;
   loading: boolean;
-  login: (phone: string, password: string) => Promise<Member>;
+  login: (memberCode: string, password: string) => Promise<Member>;
   register: (input: {
     name: string;
     phone: string;
-    password: string;
-    sponsorCode: string;
-  }) => Promise<Member>;
+    panNumber: string;
+    pinCode?: string;
+  }) => Promise<{ member: Member; credentials: IssuedCredentials }>;
   logout: () => void;
   refresh: () => Promise<void>;
 };
@@ -51,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(stored);
     loadFromToken(stored)
       .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
+        clearToken();
         setToken(null);
         setMember(null);
       })
@@ -63,28 +70,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       member,
       loading,
-      async login(phone, password) {
+      async login(memberCode, password) {
         const data = await api<{ token: string; member: Member }>("/auth/login", {
           method: "POST",
-          body: { phone, password },
+          body: { memberCode, password },
         });
-        localStorage.setItem(TOKEN_KEY, data.token);
+        persistToken(data.token);
         setToken(data.token);
         setMember(data.member);
         return data.member;
       },
       async register(input) {
-        const data = await api<{ token: string; member: Member }>("/auth/register", {
+        const data = await api<{
+          token: string;
+          member: Member;
+          credentials: IssuedCredentials;
+        }>("/auth/register", {
           method: "POST",
           body: input,
         });
-        localStorage.setItem(TOKEN_KEY, data.token);
+        persistToken(data.token);
         setToken(data.token);
         setMember(data.member);
-        return data.member;
+        return { member: data.member, credentials: data.credentials };
       },
       logout() {
-        localStorage.removeItem(TOKEN_KEY);
+        clearToken();
         setToken(null);
         setMember(null);
       },

@@ -5,41 +5,44 @@ import { prisma } from "./db";
 import { requireAuth, requireRole, signToken } from "./auth";
 import { utcDateKey } from "./dates";
 import { computeMatching } from "./matching";
-import {
-  countActivationTowardUpline,
-  fetchSubtree,
-  getOrCreateVolume,
-  nextMemberCode,
-  placeUnderSponsor,
-} from "./tree";
+import { activateMember, fetchSubtree, getOrCreateVolume, nextMemberCode, placeUnderSponsor } from "./tree";
 import { creditWallet } from "./wallet";
+import { generatePassword, isValidPan, normalizePan } from "./credentials";
+import { consumePinForJoining, issuePin, publicPin } from "./pins";
 
 const registerSchema = z.object({
   name: z.string().min(2),
   phone: z.string().regex(/^[0-9]{10}$/, "Enter a 10-digit phone number."),
-  password: z.string().min(6),
-  sponsorCode: z.string().min(3),
+  panNumber: z.string().min(10),
+  pinCode: z.string().optional(),
 });
 
 const loginSchema = z.object({
-  phone: z.string().min(10),
+  memberCode: z.string().min(3),
   password: z.string().min(1),
 });
 
-function publicMember(member: {
-  id: string;
-  name: string;
-  phone: string;
-  memberCode: string;
-  role: string;
-  rank: string | null;
-  status: string;
-  sponsorId: string | null;
-  parentId: string | null;
-  position: string | null;
-  activatedAt: Date | null;
-  createdAt: Date;
-}) {
+function publicMember(
+  member: {
+    id: string;
+    name: string;
+    phone: string;
+    memberCode: string;
+    role: string;
+    rank: string | null;
+    status: string;
+    kycStatus: string;
+    panNumber: string;
+    photoUrl: string | null;
+    address: string | null;
+    sponsorId: string | null;
+    parentId: string | null;
+    position: string | null;
+    activatedAt: Date | null;
+    createdAt: Date;
+  },
+  opts: { includePan?: boolean } = {},
+) {
   return {
     id: member.id,
     name: member.name,
@@ -48,6 +51,10 @@ function publicMember(member: {
     role: member.role,
     rank: member.rank,
     status: member.status,
+    kycStatus: member.kycStatus,
+    photoUrl: member.photoUrl,
+    address: member.address,
+    panNumber: opts.includePan ? member.panNumber : undefined,
     sponsorId: member.sponsorId,
     parentId: member.parentId,
     position: member.position,
@@ -77,21 +84,32 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input." });
     }
-    const { name, phone, password, sponsorCode } = parsed.data;
+    const { name, phone, pinCode } = parsed.data;
+    const panNumber = normalizePan(parsed.data.panNumber);
+    if (!isValidPan(panNumber)) {
+      return reply.code(400).send({ error: "Enter a valid PAN (e.g. ABCDE1234F)." });
+    }
     const existing = await prisma.member.findUnique({ where: { phone } });
     if (existing) {
       return reply.code(409).send({ error: "This phone number is already registered." });
     }
-    const sponsor = await prisma.member.findUnique({ where: { memberCode: sponsorCode.toUpperCase() } });
-    if (!sponsor || sponsor.status !== "ACTIVE") {
-      return reply.code(400).send({ error: "Sponsor code must belong to an active distributor." });
+    const sponsor = await prisma.member.findFirst({
+      where: { role: "MEMBER", status: "ACTIVE" },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!sponsor) {
+      return reply.code(400).send({ error: "Registration is not open yet. Contact support." });
     }
     const placement = await placeUnderSponsor(sponsor.id);
+    const plainPassword = generatePassword();
     const member = await prisma.member.create({
       data: {
         name: name.trim(),
         phone,
-        password: await bcrypt.hash(password, 10),
+        panNumber,
+        kycStatus: "PENDING",
+        password: await bcrypt.hash(plainPassword, 10),
+        issuedPassword: plainPassword,
         memberCode: await nextMemberCode(),
         sponsorId: sponsor.id,
         parentId: placement.parentId,
@@ -102,26 +120,47 @@ export async function registerRoutes(app: FastifyInstance) {
         wallet: { create: { balance: 0 } },
       },
     });
+    if (pinCode?.trim()) {
+      try {
+        await consumePinForJoining({ code: pinCode }, member.id);
+      } catch (err) {
+        await prisma.wallet.delete({ where: { memberId: member.id } });
+        await prisma.member.delete({ where: { id: member.id } });
+        return reply.code(400).send({
+          error: err instanceof Error ? err.message : "That PIN could not be used.",
+        });
+      }
+    }
+    const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
     const token = signToken({
-      id: member.id,
-      role: member.role,
-      phone: member.phone,
-      memberCode: member.memberCode,
+      id: fresh.id,
+      role: fresh.role,
+      phone: fresh.phone,
+      memberCode: fresh.memberCode,
     });
-    return { token, member: publicMember(member) };
+    return {
+      token,
+      member: publicMember(fresh, { includePan: true }),
+      credentials: { memberCode: fresh.memberCode, password: plainPassword },
+    };
   });
 
   app.post("/auth/login", async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Enter phone and password." });
+      return reply.code(400).send({ error: "Enter Member ID and password." });
     }
-    const member = await prisma.member.findUnique({ where: { phone: parsed.data.phone } });
+    const member = await prisma.member.findUnique({
+      where: { memberCode: parsed.data.memberCode.trim().toUpperCase() },
+    });
     if (!member || !(await bcrypt.compare(parsed.data.password, member.password))) {
-      return reply.code(401).send({ error: "Incorrect phone or password." });
+      return reply.code(401).send({ error: "Incorrect Member ID or password." });
     }
     if (member.status === "BLOCKED") {
       return reply.code(403).send({ error: "This account is blocked. Contact support." });
+    }
+    if (member.issuedPassword) {
+      await prisma.member.update({ where: { id: member.id }, data: { issuedPassword: null } });
     }
     const token = signToken({
       id: member.id,
@@ -129,7 +168,7 @@ export async function registerRoutes(app: FastifyInstance) {
       phone: member.phone,
       memberCode: member.memberCode,
     });
-    return { token, member: publicMember(member) };
+    return { token, member: publicMember(member, { includePan: true }) };
   });
 
   app.get("/member/me", async (request, reply) => {
@@ -148,7 +187,29 @@ export async function registerRoutes(app: FastifyInstance) {
         })
       : null;
     const cfg = await plan();
-    return { member: publicMember(member), sponsor, parent, plan: cfg };
+    return { member: publicMember(member, { includePan: true }), sponsor, parent, plan: cfg };
+  });
+
+  app.patch("/member/me", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const body = z
+      .object({
+        address: z.string().max(200).optional(),
+        photoUrl: z.string().max(500).optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "You can only update address and photo here." });
+    }
+    const updated = await prisma.member.update({
+      where: { id: member.id },
+      data: {
+        ...(body.data.address !== undefined ? { address: body.data.address.trim() || null } : {}),
+        ...(body.data.photoUrl !== undefined ? { photoUrl: body.data.photoUrl || null } : {}),
+      },
+    });
+    return { member: publicMember(updated, { includePan: true }) };
   });
 
   app.get("/member/tree", async (request, reply) => {
@@ -258,7 +319,7 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!member) return;
     const body = z
       .object({
-        purpose: z.enum(["JOINING", "ORDER"]),
+        purpose: z.enum(["JOINING", "ORDER", "PIN"]),
         amount: z.number().int().positive(),
         referenceNo: z.string().min(4),
         screenshotUrl: z.string().url().optional().or(z.literal("")),
@@ -276,6 +337,16 @@ export async function registerRoutes(app: FastifyInstance) {
       if (body.data.amount !== cfg.joiningAmount) {
         return reply.code(400).send({
           error: `Joining payment must be ₹${cfg.joiningAmount}.`,
+        });
+      }
+    }
+    if (body.data.purpose === "PIN") {
+      if (member.status !== "ACTIVE") {
+        return reply.code(400).send({ error: "Activate your ID before requesting PINs." });
+      }
+      if (body.data.amount !== cfg.joiningAmount) {
+        return reply.code(400).send({
+          error: `PIN payment must be ₹${cfg.joiningAmount}.`,
         });
       }
     }
@@ -319,6 +390,176 @@ export async function registerRoutes(app: FastifyInstance) {
       },
     });
     return payment;
+  });
+
+  app.post("/kyc/submit", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const body = z
+      .object({
+        panNumber: z.string().min(10),
+        panImageUrl: z.string().min(8),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Submit PAN number and a document image URL." });
+    }
+    const panNumber = normalizePan(body.data.panNumber);
+    if (!isValidPan(panNumber)) {
+      return reply.code(400).send({ error: "Enter a valid PAN (e.g. ABCDE1234F)." });
+    }
+    const pending = await prisma.kycSubmission.findFirst({
+      where: { memberId: member.id, status: "PENDING" },
+    });
+    if (pending) {
+      return reply.code(409).send({ error: "You already have a KYC submission waiting for review." });
+    }
+    await prisma.member.update({
+      where: { id: member.id },
+      data: { panNumber, kycStatus: "PENDING" },
+    });
+    return prisma.kycSubmission.create({
+      data: {
+        memberId: member.id,
+        panNumber,
+        panImageUrl: body.data.panImageUrl.trim(),
+        status: "PENDING",
+      },
+    });
+  });
+
+  app.get("/member/kyc", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const submissions = await prisma.kycSubmission.findMany({
+      where: { memberId: member.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        panNumber: true,
+        status: true,
+        adminNote: true,
+        createdAt: true,
+        reviewedAt: true,
+      },
+    });
+    return { kycStatus: member.kycStatus, panNumber: member.panNumber, submissions };
+  });
+
+  app.post("/pins/generate", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const body = z
+      .object({
+        referenceNo: z.string().min(4),
+        screenshotUrl: z.string().url().optional().or(z.literal("")),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Enter a UTR / reference number for the PIN payment." });
+    }
+    if (member.status !== "ACTIVE") {
+      return reply.code(400).send({ error: "Activate your ID before requesting PINs." });
+    }
+    const cfg = await plan();
+    const pending = await prisma.paymentSubmission.findFirst({
+      where: { memberId: member.id, purpose: "PIN", status: "PENDING" },
+    });
+    if (pending) {
+      return reply.code(409).send({ error: "You already have a pending PIN request." });
+    }
+    return prisma.paymentSubmission.create({
+      data: {
+        memberId: member.id,
+        purpose: "PIN",
+        amount: cfg.joiningAmount,
+        referenceNo: body.data.referenceNo.trim(),
+        screenshotUrl: body.data.screenshotUrl || null,
+        status: "PENDING",
+      },
+    });
+  });
+
+  app.post("/pins/use", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const body = z
+      .object({
+        code: z.string().min(4).optional(),
+        pinId: z.string().min(1).optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success || (!body.data.code && !body.data.pinId)) {
+      return reply.code(400).send({ error: "Enter a PIN code." });
+    }
+    try {
+      const pin = await consumePinForJoining(body.data, member.id);
+      const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
+      return { ok: true, pin: publicPin(pin), member: publicMember(fresh, { includePan: true }) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "Could not use PIN." });
+    }
+  });
+
+  app.post("/pins/:id/transfer", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ memberCode: z.string().min(3) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Enter the recipient Member ID." });
+    }
+    const pin = await prisma.pin.findUnique({ where: { id } });
+    if (!pin || pin.ownerId !== member.id) {
+      return reply.code(404).send({ error: "PIN not found." });
+    }
+    if (pin.status !== "UNUSED") {
+      return reply.code(400).send({ error: "Only unused PINs can be transferred." });
+    }
+    const recipient = await prisma.member.findUnique({
+      where: { memberCode: body.data.memberCode.trim().toUpperCase() },
+    });
+    if (!recipient || recipient.role !== "MEMBER") {
+      return reply.code(400).send({ error: "Recipient Member ID was not found." });
+    }
+    if (recipient.id === member.id) {
+      return reply.code(400).send({ error: "You already own this PIN." });
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.pin.update({
+        where: { id: pin.id },
+        data: { ownerId: recipient.id },
+      });
+      await tx.pinTransfer.create({
+        data: {
+          pinId: pin.id,
+          fromMemberId: member.id,
+          toMemberId: recipient.id,
+        },
+      });
+      return next;
+    });
+    return publicPin(updated);
+  });
+
+  app.get("/pins/used", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const pins = await prisma.pin.findMany({
+      where: { ownerId: member.id, status: "USED" },
+      orderBy: { usedAt: "desc" },
+    });
+    return pins.map(publicPin);
+  });
+
+  app.get("/pins/unused", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const pins = await prisma.pin.findMany({
+      where: { ownerId: member.id, status: "UNUSED" },
+      orderBy: { createdAt: "desc" },
+    });
+    return pins.map(publicPin);
   });
 
   app.get("/admin/payments/pending", async (request, reply) => {
@@ -406,11 +647,12 @@ export async function registerRoutes(app: FastifyInstance) {
     });
 
     if (payment.purpose === "JOINING") {
-      const updated = await prisma.member.update({
-        where: { id: member.id },
-        data: { status: "ACTIVE", activatedAt: new Date() },
-      });
-      await countActivationTowardUpline(updated);
+      await activateMember(member.id);
+    }
+
+    if (payment.purpose === "PIN") {
+      const pin = await issuePin(member.id, payment.id, admin.id);
+      return { ok: true, pin: publicPin(pin) };
     }
 
     if (payment.purpose === "ORDER" && payment.orderId) {
@@ -460,6 +702,87 @@ export async function registerRoutes(app: FastifyInstance) {
         reviewedAt: new Date(),
       },
     });
+  });
+
+  app.get("/admin/kyc/pending", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    return prisma.kycSubmission.findMany({
+      where: { status: "PENDING" },
+      include: {
+        member: { select: { name: true, memberCode: true, phone: true, kycStatus: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+  });
+
+  app.patch("/admin/kyc/:id/approve", async (request, reply) => {
+    const admin = await requireRole(request, reply, "ADMIN");
+    if (!admin) return;
+    const { id } = request.params as { id: string };
+    const submission = await prisma.kycSubmission.findUnique({ where: { id } });
+    if (!submission) return reply.code(404).send({ error: "KYC submission not found." });
+    if (submission.status !== "PENDING") {
+      return reply.code(400).send({ error: "This KYC submission was already reviewed." });
+    }
+    await prisma.$transaction([
+      prisma.kycSubmission.update({
+        where: { id },
+        data: { status: "VERIFIED", reviewedBy: admin.id, reviewedAt: new Date() },
+      }),
+      prisma.member.update({
+        where: { id: submission.memberId },
+        data: { kycStatus: "VERIFIED", panNumber: submission.panNumber },
+      }),
+    ]);
+    return { ok: true };
+  });
+
+  app.patch("/admin/kyc/:id/reject", async (request, reply) => {
+    const admin = await requireRole(request, reply, "ADMIN");
+    if (!admin) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ adminNote: z.string().min(2) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Add a note so the member knows why it was rejected." });
+    }
+    const submission = await prisma.kycSubmission.findUnique({ where: { id } });
+    if (!submission) return reply.code(404).send({ error: "KYC submission not found." });
+    if (submission.status !== "PENDING") {
+      return reply.code(400).send({ error: "This KYC submission was already reviewed." });
+    }
+    await prisma.$transaction([
+      prisma.kycSubmission.update({
+        where: { id },
+        data: {
+          status: "REJECTED",
+          adminNote: body.data.adminNote,
+          reviewedBy: admin.id,
+          reviewedAt: new Date(),
+        },
+      }),
+      prisma.member.update({
+        where: { id: submission.memberId },
+        data: { kycStatus: "REJECTED" },
+      }),
+    ]);
+    return { ok: true };
+  });
+
+  app.get("/admin/pins", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    const pending = await prisma.paymentSubmission.findMany({
+      where: { purpose: "PIN", status: "PENDING" },
+      include: {
+        member: { select: { name: true, memberCode: true, phone: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    const recent = await prisma.pin.findMany({
+      include: { owner: { select: { name: true, memberCode: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return { pending, recent };
   });
 
   app.post("/admin/run-matching", async (request, reply) => {
@@ -547,7 +870,20 @@ export async function registerRoutes(app: FastifyInstance) {
             }
           : {}),
       },
-      include: { wallet: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        memberCode: true,
+        panNumber: true,
+        kycStatus: true,
+        status: true,
+        rank: true,
+        position: true,
+        issuedPassword: true,
+        createdAt: true,
+        wallet: { select: { balance: true } },
+      },
       orderBy: { createdAt: "desc" },
     });
   });
@@ -666,6 +1002,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
 const productSchema = z.object({
   name: z.string().min(2),
+  description: z.string().optional(),
   dp: z.number().int().positive(),
   mrp: z.number().int().positive(),
   stock: z.number().int().min(0),

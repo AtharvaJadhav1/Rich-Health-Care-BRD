@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type Product = {
   id: string;
   name: string;
+  description: string | null;
   dp: number;
   mrp: number;
   stock: number;
+  imageUrl: string | null;
 };
 
 const API_ORIGIN = process.env.API_ORIGIN ?? `http://127.0.0.1:${process.env.API_PORT ?? "43124"}`;
@@ -45,10 +47,17 @@ export default async function ProductsPage() {
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {products.map((product) => (
           <Card key={product.id}>
+            {product.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.imageUrl} alt="" className="h-40 w-full rounded-t-xl object-cover" />
+            ) : null}
             <CardHeader>
               <CardTitle className="text-lg">{product.name}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {product.description ? (
+                <p className="text-sm text-muted-foreground">{product.description}</p>
+              ) : null}
               <p className="text-sm text-muted-foreground line-through">{inr(product.mrp)} MRP</p>
               <p className="text-2xl font-semibold">{inr(product.dp)} DP</p>
               <p className="text-sm text-muted-foreground">{product.stock} in stock</p>

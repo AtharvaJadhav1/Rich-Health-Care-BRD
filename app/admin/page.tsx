@@ -85,7 +85,8 @@ function Inner() {
         <div>
           <h1 className="font-heading text-3xl font-semibold">Pending payments</h1>
           <p className="text-sm text-muted-foreground">
-            Approve joining fees and orders here. Binary counts and wallet credits start only after approval.
+            Approve joining fees, orders, and PIN payments here. Binary counts and wallet credits start only after approval.
+            Approving a PIN payment issues a unique unused PIN to the member.
           </p>
         </div>
         <Button variant="outline" onClick={() => downloadCsv("/admin/payments/export", "payments.csv")}>

@@ -221,6 +221,27 @@ function DashboardInner() {
                   Rejected: {p.adminNote}. Submit a new reference to try again.
                 </p>
               ))}
+            <form
+              className="flex flex-col gap-3 sm:flex-row"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const code = String(new FormData(form).get("pinCode") ?? "");
+                try {
+                  await api("/pins/use", { method: "POST", body: { code } });
+                  toast.success("PIN used. Your ID is now active.");
+                  form.reset();
+                  await load();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not use PIN");
+                }
+              }}
+            >
+              <Input name="pinCode" placeholder="Or activate with a PIN code" required />
+              <Button type="submit" variant="outline">
+                Use PIN
+              </Button>
+            </form>
           </CardContent>
         </Card>
       ) : null}
@@ -250,7 +271,7 @@ function DashboardInner() {
           </CardHeader>
           <CardContent>
             <p className="font-mono text-2xl">{member.memberCode}</p>
-            <p className="text-sm text-muted-foreground">New members must use an active sponsor code.</p>
+            <p className="text-sm text-muted-foreground">Share this ID so others can receive PIN transfers.</p>
           </CardContent>
         </Card>
       </div>

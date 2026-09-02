@@ -8,27 +8,34 @@ datasource db {
 }
 
 model Member {
-  id          String       @id @default(cuid())
-  name        String
-  phone       String       @unique
-  password    String
-  memberCode  String       @unique
-  sponsorId   String?
-  sponsor     Member?      @relation("Sponsor", fields: [sponsorId], references: [id])
-  referrals   Member[]     @relation("Sponsor")
-  parentId    String?
-  parent      Member?      @relation("BinaryTree", fields: [parentId], references: [id])
-  children    Member[]     @relation("BinaryTree")
-  position    String?
-  role        String       @default("MEMBER")
-  rank        String?
-  status      String       @default("PENDING_PAYMENT")
-  activatedAt DateTime?
-  wallet      Wallet?
-  volumes     BinaryVolume[]
-  orders      Order[]
-  payments    PaymentSubmission[]
-  createdAt   DateTime     @default(now())
+  id             String             @id @default(cuid())
+  name           String
+  phone          String             @unique
+  password       String
+  memberCode     String             @unique
+  panNumber      String
+  kycStatus      String             @default("PENDING")
+  photoUrl       String?
+  address        String?
+  issuedPassword String?
+  sponsorId      String?
+  sponsor        Member?            @relation("Sponsor", fields: [sponsorId], references: [id])
+  referrals      Member[]           @relation("Sponsor")
+  parentId       String?
+  parent         Member?            @relation("BinaryTree", fields: [parentId], references: [id])
+  children       Member[]           @relation("BinaryTree")
+  position       String?
+  role           String             @default("MEMBER")
+  rank           String?
+  status         String             @default("PENDING_PAYMENT")
+  activatedAt    DateTime?
+  wallet         Wallet?
+  volumes        BinaryVolume[]
+  orders         Order[]
+  payments       PaymentSubmission[]
+  kycSubmissions KycSubmission[]
+  pinsOwned      Pin[]              @relation("PinOwner")
+  createdAt      DateTime           @default(now())
 }
 
 model PaymentSubmission {
@@ -45,6 +52,42 @@ model PaymentSubmission {
   reviewedBy    String?
   reviewedAt    DateTime?
   createdAt     DateTime @default(now())
+}
+
+model KycSubmission {
+  id          String    @id @default(cuid())
+  memberId    String
+  member      Member    @relation(fields: [memberId], references: [id])
+  panNumber   String
+  panImageUrl String
+  status      String    @default("PENDING")
+  adminNote   String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Pin {
+  id                   String        @id @default(cuid())
+  code                 String        @unique
+  ownerId              String
+  owner                Member        @relation("PinOwner", fields: [ownerId], references: [id])
+  status               String        @default("UNUSED")
+  paymentSubmissionId  String?
+  generatedBy          String?
+  usedAt               DateTime?
+  usedForMemberId      String?
+  transfers            PinTransfer[]
+  createdAt            DateTime      @default(now())
+}
+
+model PinTransfer {
+  id            String   @id @default(cuid())
+  pinId         String
+  pin           Pin      @relation(fields: [pinId], references: [id])
+  fromMemberId  String
+  toMemberId    String
+  transferredAt DateTime @default(now())
 }
 
 model Wallet {
@@ -85,23 +128,24 @@ model BinaryVolume {
 }
 
 model MatchingRun {
-  id                String   @id @default(cuid())
-  date              String   @unique
-  ranAt             DateTime @default(now())
-  membersProcessed  Int
-  pairsTotal        Int
-  payoutTotal       Int
+  id               String   @id @default(cuid())
+  date             String   @unique
+  ranAt            DateTime @default(now())
+  membersProcessed Int
+  pairsTotal       Int
+  payoutTotal      Int
 }
 
 model Product {
-  id       String  @id @default(cuid())
-  name     String
-  dp       Int
-  mrp      Int
-  stock    Int     @default(0)
-  active   Boolean @default(true)
-  imageUrl String?
-  orders   Order[]
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  dp          Int
+  mrp         Int
+  stock       Int     @default(0)
+  active      Boolean @default(true)
+  imageUrl    String?
+  orders      Order[]
 }
 
 model Order {

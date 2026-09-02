@@ -16,6 +16,8 @@ type MemberRow = {
   phone: string;
   memberCode: string;
   status: string;
+  kycStatus: string;
+  issuedPassword: string | null;
   rank: string | null;
   position: string | null;
   wallet: { balance: number } | null;
@@ -95,6 +97,7 @@ function Inner() {
             <tr>
               <th className="py-2">Member</th>
               <th>Status</th>
+              <th>KYC</th>
               <th>Rank</th>
               <th>Wallet</th>
               <th></th>
@@ -107,10 +110,14 @@ function Inner() {
                   <p className="font-medium">{row.name}</p>
                   <p className="text-muted-foreground">
                     {row.memberCode} · {row.phone}
+                    {row.issuedPassword ? ` · issued password ${row.issuedPassword}` : ""}
                   </p>
                 </td>
                 <td>
                   <Badge variant={row.status === "ACTIVE" ? "default" : "secondary"}>{row.status}</Badge>
+                </td>
+                <td>
+                  <Badge variant={row.kycStatus === "VERIFIED" ? "default" : "secondary"}>{row.kycStatus}</Badge>
                 </td>
                 <td>
                   <Input

@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start -p 43123 -H 0.0.0.0",
     "lint": "eslint",
-    "test": "tsx --test server/matching.test.ts",
+    "test": "tsx --test server/matching.test.ts server/credentials.test.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma generate && prisma db push && tsx prisma/seed.ts",

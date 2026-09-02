@@ -5,7 +5,7 @@ export default function AboutPage() {
       <h1 className="font-heading text-4xl font-semibold">A lean binary plan, run with receipts.</h1>
       <p className="text-lg text-muted-foreground">
         Rich Health Care is a wellness direct-selling company. This platform covers the core of the business:
-        sponsored registration, a left/right tree with auto-spillover, manual payment approval, retail margin,
+        PAN-verified registration, a left/right tree with auto-spillover, manual payment approval, retail margin,
         and daily matching income with GST and admin cuts.
       </p>
       <p className="text-muted-foreground">

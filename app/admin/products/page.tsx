@@ -14,10 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type Product = {
   id: string;
   name: string;
+  description: string | null;
   dp: number;
   mrp: number;
   stock: number;
   active: boolean;
+  imageUrl: string | null;
 };
 
 export default function AdminProductsPage() {
@@ -29,7 +31,7 @@ export default function AdminProductsPage() {
 }
 
 function Inner() {
-  const empty = { name: "", dp: 999, mrp: 1499, stock: 0 };
+  const empty = { name: "", description: "", dp: 999, mrp: 1499, stock: 0, imageUrl: "" };
   const [form, setForm] = useState(empty);
   const [rows, setRows] = useState<Product[] | null>(null);
 
@@ -82,6 +84,20 @@ function Inner() {
             <div className="space-y-2 md:col-span-2">
               <Label>Name</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </div>
+            <div className="space-y-2 md:col-span-3">
+              <Label>Description</Label>
+              <Input
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-5">
+              <Label>Image URL</Label>
+              <Input
+                value={form.imageUrl}
+                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
               <Label>DP</Label>

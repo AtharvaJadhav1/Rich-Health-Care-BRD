@@ -26,6 +26,9 @@ async function main() {
 
   await prisma.ledgerEntry.deleteMany();
   await prisma.binaryVolume.deleteMany();
+  await prisma.pinTransfer.deleteMany();
+  await prisma.pin.deleteMany();
+  await prisma.kycSubmission.deleteMany();
   await prisma.paymentSubmission.deleteMany();
   await prisma.order.deleteMany();
   await prisma.wallet.deleteMany();
@@ -37,6 +40,8 @@ async function main() {
     data: {
       name: "Platform Admin",
       phone: "9999999999",
+      panNumber: "AAAAA9999A",
+      kycStatus: "VERIFIED",
       password: adminPassword,
       memberCode: "ADMIN",
       role: "ADMIN",
@@ -51,6 +56,8 @@ async function main() {
     data: {
       name: "Priya Sharma",
       phone: "9000000001",
+      panNumber: "BQSPA1111P",
+      kycStatus: "VERIFIED",
       password,
       memberCode: "RHC0001",
       role: "MEMBER",
@@ -65,6 +72,8 @@ async function main() {
     data: {
       name: "Amit Verma",
       phone: "9000000002",
+      panNumber: "AAAPA1111A",
+      kycStatus: "VERIFIED",
       password,
       memberCode: "RHC0002",
       role: "MEMBER",
@@ -82,6 +91,8 @@ async function main() {
     data: {
       name: "Kavita Nair",
       phone: "9000000003",
+      panNumber: "AAAPA2222A",
+      kycStatus: "PENDING",
       password,
       memberCode: "RHC0003",
       role: "MEMBER",
@@ -99,6 +110,8 @@ async function main() {
     data: {
       name: "Neha Joshi",
       phone: "9000000004",
+      panNumber: "AAAPA3333A",
+      kycStatus: "PENDING",
       password,
       memberCode: "RHC0004",
       role: "MEMBER",
@@ -116,6 +129,8 @@ async function main() {
     data: {
       name: "Rohan Desai",
       phone: "9000000005",
+      panNumber: "AAAPA4444A",
+      kycStatus: "REJECTED",
       password,
       memberCode: "RHC0005",
       role: "MEMBER",
@@ -172,6 +187,7 @@ async function main() {
     data: [
       {
         name: "Daily Wellness Pack",
+        description: "Daily nutrition pack at distributor price ₹999 (MRP ₹1,499).",
         dp: 999,
         mrp: 1499,
         stock: 120,
@@ -179,6 +195,7 @@ async function main() {
       },
       {
         name: "Immunity Drops 30ml",
+        description: "Liquid immunity support. Retail margin ₹500 after approved orders.",
         dp: 999,
         mrp: 1499,
         stock: 80,
@@ -186,6 +203,7 @@ async function main() {
       },
       {
         name: "Joint Care Capsules",
+        description: "Joint mobility capsules for the distributor catalog.",
         dp: 999,
         mrp: 1499,
         stock: 60,
@@ -193,6 +211,7 @@ async function main() {
       },
       {
         name: "Green Spirulina Tablets",
+        description: "Spirulina tablets. Product photos can be added from Admin → Products.",
         dp: 999,
         mrp: 1499,
         stock: 90,
@@ -202,8 +221,8 @@ async function main() {
   });
 
   console.log("Seeded Rich Health Care demo data.");
-  console.log("Admin:", admin.phone, "/ Admin@123");
-  console.log("Root distributor:", root.phone, "/ Member@123 / code", root.memberCode);
+  console.log("Admin:", admin.memberCode, "/ Admin@123");
+  console.log("Root distributor:", root.memberCode, "/ Member@123");
 }
 
 main()
