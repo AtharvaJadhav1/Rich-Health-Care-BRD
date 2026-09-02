@@ -27,26 +27,5 @@ function run(command: string, args: string[]) {
   return child;
 }
 
-async function waitForApi() {
-  const url = `http://127.0.0.1:${apiPort}/health`;
-  for (let i = 0; i < 60; i += 1) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) return;
-    } catch {
-      // API still starting
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`API did not become ready on port ${apiPort}`);
-}
-
 run("npx", ["tsx", "server/index.ts"]);
-waitForApi()
-  .then(() => {
-    run("npx", ["next", "start", "-H", "0.0.0.0", "-p", webPort]);
-  })
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+run("npx", ["next", "start", "-H", "0.0.0.0", "-p", webPort]);

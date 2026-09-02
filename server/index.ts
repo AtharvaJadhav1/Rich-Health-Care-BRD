@@ -38,9 +38,11 @@ async function main() {
   });
   await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
   await registerRoutes(app);
-  await ensurePlanAndCatalog();
   await app.listen({ port: PORT, host: HOST });
   console.log(`Rich Health Care API on http://${HOST}:${PORT}`);
+  ensurePlanAndCatalog().catch((err) => {
+    console.error("Catalog sync failed.", err);
+  });
 }
 
 main().catch((err) => {
