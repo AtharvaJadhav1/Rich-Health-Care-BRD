@@ -1,7 +1,10 @@
 import "dotenv/config";
 import { spawn } from "node:child_process";
 
-const env = { ...process.env, NODE_ENV: process.env.NODE_ENV || "production" };
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  NODE_ENV: process.env.NODE_ENV || "production",
+};
 
 if (!env.DATABASE_URL) {
   console.error("DATABASE_URL is required.");
