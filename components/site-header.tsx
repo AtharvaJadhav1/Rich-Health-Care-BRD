@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, Leaf, Menu } from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,10 +61,12 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Leaf className="size-4" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.jpg" alt="Rich Health Care Solution" className="size-10 rounded-full object-cover" />
+          <span className="leading-tight">
+            Rich Health Care
+            <span className="block text-[10px] font-medium tracking-wide text-muted-foreground">Ayurveda</span>
           </span>
-          Rich Health Care
         </Link>
         <nav className="hidden items-center gap-5 text-sm md:flex">
           {memberLinks.map((link) => (

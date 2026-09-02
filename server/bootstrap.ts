@@ -3,34 +3,117 @@ import { prisma } from "./db";
 import { issuePassword } from "./auth";
 import { isValidPan, normalizePan } from "./credentials";
 
+const DEMO_PRODUCT_NAMES = [
+  "Daily Wellness Pack",
+  "Immunity Drops 30ml",
+  "Joint Care Capsules",
+  "Green Spirulina Tablets",
+];
+
 const DEFAULT_PRODUCTS = [
   {
-    name: "Daily Wellness Pack",
-    description: "Daily nutrition pack at distributor price ₹999 (MRP ₹1,499).",
+    name: "Super Lady Care Juice",
+    description: "500 ml Ayurvedic women's wellness juice for daily vitality and hormonal support.",
     dp: 999,
     mrp: 1499,
-    stock: 0,
+    stock: 50,
+    imageUrl: "/products/super-lady-care-juice.jpg",
   },
   {
-    name: "Immunity Drops 30ml",
-    description: "Liquid immunity support. Retail margin ₹500 after approved orders.",
+    name: "Rich Health Amrit Juice Ai1",
+    description: "500 ml herbal concentrate blended as a daily immunity and wellness tonic.",
     dp: 999,
     mrp: 1499,
-    stock: 0,
+    stock: 50,
+    imageUrl: "/products/amrit-juice.jpg",
   },
   {
-    name: "Joint Care Capsules",
-    description: "Joint mobility capsules for the distributor catalog.",
+    name: "Orthonill Powder",
+    description: "150 g Ayurvedic powder for joint comfort. Take as directed on the pack.",
     dp: 999,
     mrp: 1499,
-    stock: 0,
+    stock: 50,
+    imageUrl: "/products/orthonill-powder.jpg",
   },
   {
-    name: "Green Spirulina Tablets",
-    description: "Spirulina tablets. Add a product photo from Admin → Products.",
+    name: "Orthonill Vati",
+    description: "30 tablets for joint and muscle comfort. One tablet morning and evening with lukewarm water.",
     dp: 999,
     mrp: 1499,
-    stock: 0,
+    stock: 50,
+    imageUrl: "/products/orthonill-vati.jpg",
+  },
+  {
+    name: "Diaba Nill Powder",
+    description: "150 g Ayurvedic powder formulated as a daily wellness support for sugar management.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/diaba-nill-powder.jpg",
+  },
+  {
+    name: "Petshudhhi Powder",
+    description: "70 g digestive cleansing powder. Take with lukewarm water as directed.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/petshudhhi-powder.jpg",
+  },
+  {
+    name: "Hair Growth Oil",
+    description: "Ayurvedic hair oil with Amla and Bhringraj to nourish the scalp and reduce hair fall.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/hair-growth-oil.jpg",
+  },
+  {
+    name: "Natural Herbs Hair Treatment Oil",
+    description: "Herbal hair treatment oil to strengthen roots and nourish the scalp.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/hair-and-body-oils.jpg",
+  },
+  {
+    name: "Ayurvedic Body Pain & Massage Oil",
+    description: "Massage oil for joint and muscle comfort and daily relaxation.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/hair-and-body-oils.jpg",
+  },
+  {
+    name: "Anti Hair Fall Shampoo",
+    description: "Ayurvedic shampoo to strengthen roots, reduce hair fall, and keep the scalp clean.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/anti-hair-fall-shampoo.jpg",
+  },
+  {
+    name: "Skin Care Soap",
+    description: "75 g neem and papaya soap for daily cleansing. MRP ₹175.",
+    dp: 125,
+    mrp: 175,
+    stock: 50,
+    imageUrl: "/products/skin-care-soap.jpg",
+  },
+  {
+    name: "Glow Herb Soap",
+    description: "75 g herbal soap for a natural glow. MRP ₹199.",
+    dp: 140,
+    mrp: 199,
+    stock: 50,
+    imageUrl: "/products/glow-herb-soap.jpg",
+  },
+  {
+    name: "Rich Fly Sanitary Pads",
+    description: "11 pcs, 290 mm cotton pads with anion chip. Chemical-free personal care.",
+    dp: 999,
+    mrp: 1499,
+    stock: 50,
+    imageUrl: "/products/rich-fly-pads.jpg",
   },
 ];
 
@@ -51,13 +134,33 @@ export async function ensurePlanAndCatalog() {
   await prisma.companySettings.upsert({
     where: { id: "default" },
     update: {},
-    create: { id: "default", companyName: "Rich Health Care" },
+    create: {
+      id: "default",
+      companyName: "Rich Health Care Solution",
+      contactPhone: "9867032655",
+    },
   });
-  const productCount = await prisma.product.count();
-  if (productCount === 0) {
-    await prisma.product.createMany({
-      data: DEFAULT_PRODUCTS.map((p) => ({ ...p, active: true })),
+  const settings = await prisma.companySettings.findUniqueOrThrow({ where: { id: "default" } });
+  if (!settings.contactPhone) {
+    await prisma.companySettings.update({
+      where: { id: "default" },
+      data: { contactPhone: "9867032655" },
     });
+  }
+  await prisma.product.updateMany({
+    where: { name: { in: DEMO_PRODUCT_NAMES } },
+    data: { active: false },
+  });
+  for (const product of DEFAULT_PRODUCTS) {
+    const existing = await prisma.product.findFirst({ where: { name: product.name } });
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { ...product, active: true },
+      });
+    } else {
+      await prisma.product.create({ data: { ...product, active: true } });
+    }
   }
 }
 

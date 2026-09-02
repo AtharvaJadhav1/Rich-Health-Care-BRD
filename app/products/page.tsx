@@ -34,10 +34,10 @@ export default async function ProductsPage() {
     <div className="mx-auto max-w-6xl px-4 py-16">
       <div className="mb-10 max-w-2xl">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Catalog</p>
-        <h1 className="font-heading mt-2 text-4xl font-semibold">Wellness range at distributor price</h1>
+        <h1 className="font-heading mt-2 text-4xl font-semibold">Ayurvedic range at distributor price</h1>
         <p className="mt-3 text-muted-foreground">
-          Every pack has a ₹999 DP and ₹1,499 MRP. The ₹500 retail margin is credited only after an admin
-          approves the order payment.
+          Photos and pack details are from Rich Health Care Solution. Retail income is credited only after an
+          admin approves the order payment.
         </p>
       </div>
       {error ? <p className="text-destructive">{error}</p> : null}
@@ -49,7 +49,7 @@ export default async function ProductsPage() {
           <Card key={product.id}>
             {product.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.imageUrl} alt="" className="h-40 w-full rounded-t-xl object-cover" />
+              <img src={product.imageUrl} alt="" className="h-52 w-full rounded-t-xl bg-white object-contain p-2" />
             ) : null}
             <CardHeader>
               <CardTitle className="text-lg">{product.name}</CardTitle>

@@ -19,7 +19,7 @@ export default function SetupPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<SetupResult | null>(null);
   const [form, setForm] = useState({
-    companyName: "Rich Health Care",
+      companyName: "Rich Health Care Solution",
     adminName: "",
     adminPhone: "",
     adminPassword: "",

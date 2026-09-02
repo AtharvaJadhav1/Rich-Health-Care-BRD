@@ -39,15 +39,15 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div className="space-y-6">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">
-              Direct selling · Binary plan
+              Ayurveda · Direct selling
             </p>
             <h1 className="font-heading text-4xl leading-tight font-semibold md:text-5xl">
-              Wellness products. A fair pairing plan. Wallet credits you can audit.
+              Rich Health Care Solution. Herbal products. A pairing plan you can audit.
             </h1>
             <p className="max-w-xl text-lg text-muted-foreground">
-              Rich Health Care distributors join at ₹999, sell at a ₹500 retail margin, and earn matching
-              income only after payments are approved. Carry-forward is automatic. The 10-pair daily cap is
-              enforced in the engine, not on a slide.
+              Distributors join at ₹999, sell the Ayurvedic catalog, and earn matching income only after
+              payments are approved. Carry-forward is automatic. The 10-pair daily cap is enforced in the
+              engine, not on a slide.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/register" className={buttonVariants({ size: "lg" })}>
@@ -81,8 +81,7 @@ export default async function HomePage() {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Products</p>
           <h2 className="font-heading mt-2 text-3xl font-semibold">Catalog at distributor price</h2>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Names, details, DP and MRP come from the live catalog. Admins add product photos from the
-            products desk.
+            Names, photos, DP and MRP come from the live Rich Health Care catalog.
           </p>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -90,7 +89,7 @@ export default async function HomePage() {
             <Card key={product.id}>
               {product.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={product.imageUrl} alt="" className="h-40 w-full rounded-t-xl object-cover" />
+                <img src={product.imageUrl} alt="" className="h-52 w-full rounded-t-xl bg-white object-contain p-2" />
               ) : (
                 <div className="flex h-40 items-center justify-center rounded-t-xl bg-muted text-sm text-muted-foreground">
                   Photo pending

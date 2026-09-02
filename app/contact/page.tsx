@@ -30,7 +30,7 @@ export default function ContactPage() {
   }
 
   const email = status?.contactEmail?.trim();
-  const phone = status?.contactPhone?.trim();
+  const phone = status?.contactPhone?.trim() || "9867032655";
 
   return (
     <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2">
@@ -38,17 +38,16 @@ export default function ContactPage() {
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Contact</p>
         <h1 className="font-heading mt-2 text-4xl font-semibold">Talk to the desk</h1>
         <p className="mt-4 text-muted-foreground">
-          For joining, payment confirmation, or product supply, write to {status?.companyName ?? "Rich Health Care"}.
+          For joining, payment confirmation, or product supply, write to{" "}
+          {status?.companyName ?? "Rich Health Care Solution"}.
           Payments are confirmed by UTR: include your Member ID and bank reference if you are following up on a
           transfer.
         </p>
         <div className="mt-8 space-y-2 text-sm">
           {email ? <p>Email: {email}</p> : null}
-          {phone ? <p>Phone: {phone}</p> : null}
-          {!email && !phone ? (
-            <p className="text-muted-foreground">
-              Public desk details are set by the administrator under Plan config.
-            </p>
+          {phone ? <p>Call / WhatsApp: {phone}</p> : null}
+          {!email && !status?.contactPhone ? (
+            <p className="text-muted-foreground">Email can be added by the administrator under Plan config.</p>
           ) : null}
           <p>Hours: Monday–Saturday, 10:00–18:00 IST</p>
         </div>

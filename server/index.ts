@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { registerRoutes } from "./routes";
+import { ensurePlanAndCatalog } from "./bootstrap";
 
 const PORT = Number(process.env.API_PORT ?? 43124);
 const HOST = process.env.API_HOST ?? "0.0.0.0";
@@ -37,6 +38,7 @@ async function main() {
   });
   await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
   await registerRoutes(app);
+  await ensurePlanAndCatalog();
   await app.listen({ port: PORT, host: HOST });
   console.log(`Rich Health Care API on http://${HOST}:${PORT}`);
 }
