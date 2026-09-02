@@ -26,7 +26,9 @@ export function fieldValue(form: HTMLFormElement, name: string): string {
   const fromData = String(new FormData(form).get(name) ?? "").trim();
   if (fromData) return fromData;
   const el = form.elements.namedItem(name);
-  if (el && "value" in el) return String((el as HTMLInputElement).value).trim();
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+    return el.value.trim();
+  }
   return "";
 }
 

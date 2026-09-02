@@ -47,9 +47,9 @@ function Inner() {
       .then(([cfg, co]) => {
         setForm(cfg);
         setCompany({
-          contactEmail: "",
-          contactPhone: "",
           ...co,
+          contactEmail: co.contactEmail ?? "",
+          contactPhone: co.contactPhone ?? "",
         });
       })
       .catch((err) => toast.error(err.message));

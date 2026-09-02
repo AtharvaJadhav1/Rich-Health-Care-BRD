@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async refresh() {
         const stored = getToken();
         if (!stored) return;
-        await loadFromToken(stored);
+        await loadFromToken(stored, sessionRef.current);
       },
     }),
     [token, member, loading],
