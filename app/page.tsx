@@ -71,6 +71,7 @@ export default async function HomePage() {
               <Row k="GST + admin cut" v="5% + 5%" />
               <Row k="Matching (net)" v="₹225 per pair" />
               <Row k="Daily cap" v="10 pairs · ₹2,250 net" />
+              <Row k="Weekly payouts" v="Admin-approved, Monday–Sunday IST" />
             </CardContent>
           </Card>
         </div>
@@ -80,8 +81,8 @@ export default async function HomePage() {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Products</p>
           <h2 className="font-heading mt-2 text-3xl font-semibold">Catalog at distributor price</h2>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            Names, details, DP and MRP come from the live catalog. Add product photos in Admin when the
-            client supplies assets.
+            Names, details, DP and MRP come from the live catalog. Admins add product photos from the
+            products desk.
           </p>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

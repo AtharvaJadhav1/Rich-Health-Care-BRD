@@ -8,6 +8,7 @@ const links = [
   { href: "/admin", label: "Payments" },
   { href: "/admin/kyc", label: "KYC" },
   { href: "/admin/pins", label: "PINs" },
+  { href: "/admin/weekly", label: "Weekly payouts" },
   { href: "/admin/members", label: "Members" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/matching", label: "Matching" },

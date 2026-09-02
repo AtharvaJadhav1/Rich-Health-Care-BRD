@@ -76,7 +76,7 @@ function Inner() {
       {runs?.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-muted-foreground">
-            No matching runs yet. Seeded demo volume is waiting on today&apos;s first run.
+            No matching runs yet. Run matching after real members are activated.
           </CardContent>
         </Card>
       ) : (

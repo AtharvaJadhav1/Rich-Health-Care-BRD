@@ -27,12 +27,31 @@ export default function ConfigPage() {
   );
 }
 
+type Company = {
+  companyName: string;
+  accountName: string;
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  upiId: string;
+  contactEmail: string;
+  contactPhone: string;
+};
+
 function Inner() {
   const [form, setForm] = useState<Config | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
 
   useEffect(() => {
-    api<Config>("/admin/config")
-      .then(setForm)
+    Promise.all([api<Config>("/admin/config"), api<Company>("/admin/company")])
+      .then(([cfg, co]) => {
+        setForm(cfg);
+        setCompany({
+          contactEmail: "",
+          contactPhone: "",
+          ...co,
+        });
+      })
       .catch((err) => toast.error(err.message));
   }, []);
 
@@ -83,6 +102,51 @@ function Inner() {
           </form>
         </CardContent>
       </Card>
+      {company ? (
+        <Card className="max-w-xl">
+          <CardHeader>
+            <CardTitle>Company collection bank</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="space-y-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const saved = await api<Company>("/admin/company", { method: "PATCH", body: company });
+                  setCompany(saved);
+                  toast.success("Company bank saved");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not save");
+                }
+              }}
+            >
+              {(
+                [
+                  ["companyName", "Company name"],
+                  ["accountName", "Account holder"],
+                  ["bankName", "Bank name"],
+                  ["accountNumber", "Account number"],
+                  ["ifsc", "IFSC"],
+                  ["upiId", "UPI ID"],
+                  ["contactEmail", "Public contact email"],
+                  ["contactPhone", "Public contact phone"],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={key}>{label}</Label>
+                  <Input
+                    id={key}
+                    value={company[key]}
+                    onChange={(e) => setCompany({ ...company, [key]: e.target.value })}
+                  />
+                </div>
+              ))}
+              <Button type="submit">Save bank</Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

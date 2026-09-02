@@ -9,16 +9,24 @@ import { activateMember, fetchSubtree, getOrCreateVolume, nextMemberCode, placeU
 import { creditWallet } from "./wallet";
 import { generatePassword, isValidPan, normalizePan } from "./credentials";
 import { consumePinForJoining, issuePin, publicPin } from "./pins";
+import { bootstrapCompany, ensurePlanAndCatalog, publicStatus } from "./bootstrap";
+import {
+  approveWeeklyPayout,
+  generateWeeklyReports,
+  memberTeamSummary,
+} from "./weekly";
 
 const registerSchema = z.object({
   name: z.string().min(2),
   phone: z.string().regex(/^[0-9]{10}$/, "Enter a 10-digit phone number."),
   panNumber: z.string().min(10),
   pinCode: z.string().optional(),
+  sponsorCode: z.string().optional(),
 });
 
 const loginSchema = z.object({
-  memberCode: z.string().min(3),
+  memberCode: z.string().min(3).optional(),
+  phone: z.string().min(3).optional(),
   password: z.string().min(1),
 });
 
@@ -40,6 +48,11 @@ function publicMember(
     position: string | null;
     activatedAt: Date | null;
     createdAt: Date;
+    accountName?: string | null;
+    bankName?: string | null;
+    accountNumber?: string | null;
+    ifsc?: string | null;
+    upiId?: string | null;
   },
   opts: { includePan?: boolean } = {},
 ) {
@@ -60,6 +73,11 @@ function publicMember(
     position: member.position,
     activatedAt: member.activatedAt,
     createdAt: member.createdAt,
+    accountName: member.accountName ?? null,
+    bankName: member.bankName ?? null,
+    accountNumber: member.accountNumber ?? null,
+    ifsc: member.ifsc ?? null,
+    upiId: member.upiId ?? null,
   };
 }
 
@@ -69,6 +87,52 @@ async function plan() {
 
 export async function registerRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true }));
+
+  app.get("/public/status", async () => publicStatus());
+
+  app.post("/setup", async (request, reply) => {
+    const parsed = z
+      .object({
+        companyName: z.string().min(2),
+        adminName: z.string().min(2),
+        adminPhone: z.string().regex(/^[0-9]{10}$/),
+        adminPassword: z.string().min(8),
+        adminPan: z.string().min(10),
+        rootName: z.string().min(2),
+        rootPhone: z.string().regex(/^[0-9]{10}$/),
+        rootPan: z.string().min(10),
+        accountName: z.string().optional(),
+        bankName: z.string().optional(),
+        accountNumber: z.string().optional(),
+        ifsc: z.string().optional(),
+        upiId: z.string().optional(),
+        contactEmail: z.string().optional(),
+        contactPhone: z.string().optional(),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Fill company, admin, first distributor, and PAN details." });
+    }
+    if (!isValidPan(normalizePan(parsed.data.adminPan)) || !isValidPan(normalizePan(parsed.data.rootPan))) {
+      return reply.code(400).send({ error: "Enter valid PAN numbers (e.g. ABCDE1234F)." });
+    }
+    if (parsed.data.adminPhone === parsed.data.rootPhone) {
+      return reply.code(400).send({ error: "Admin and first distributor need different phone numbers." });
+    }
+    if (normalizePan(parsed.data.adminPan) === normalizePan(parsed.data.rootPan)) {
+      return reply.code(400).send({ error: "Admin and first distributor need different PAN numbers." });
+    }
+    try {
+      return await bootstrapCompany({
+        ...parsed.data,
+        adminPan: normalizePan(parsed.data.adminPan),
+        rootPan: normalizePan(parsed.data.rootPan),
+      });
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : "Setup failed." });
+    }
+  });
 
   app.get("/plan", async () => plan());
 
@@ -84,7 +148,10 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input." });
     }
-    const { name, phone, pinCode } = parsed.data;
+    const { name, phone, pinCode, sponsorCode } = parsed.data;
+    if ((await prisma.member.count()) === 0) {
+      return reply.code(409).send({ error: "Platform is not set up yet. Open /setup first." });
+    }
     const panNumber = normalizePan(parsed.data.panNumber);
     if (!isValidPan(panNumber)) {
       return reply.code(400).send({ error: "Enter a valid PAN (e.g. ABCDE1234F)." });
@@ -93,12 +160,18 @@ export async function registerRoutes(app: FastifyInstance) {
     if (existing) {
       return reply.code(409).send({ error: "This phone number is already registered." });
     }
-    const sponsor = await prisma.member.findFirst({
-      where: { role: "MEMBER", status: "ACTIVE" },
-      orderBy: { createdAt: "asc" },
-    });
-    if (!sponsor) {
-      return reply.code(400).send({ error: "Registration is not open yet. Contact support." });
+    const panTaken = await prisma.member.findFirst({ where: { panNumber } });
+    if (panTaken) {
+      return reply.code(409).send({ error: "This PAN is already registered." });
+    }
+    const sponsor = sponsorCode?.trim()
+      ? await prisma.member.findUnique({ where: { memberCode: sponsorCode.trim().toUpperCase() } })
+      : await prisma.member.findFirst({
+          where: { role: "MEMBER", status: "ACTIVE" },
+          orderBy: { createdAt: "asc" },
+        });
+    if (!sponsor || sponsor.status !== "ACTIVE" || sponsor.role !== "MEMBER") {
+      return reply.code(400).send({ error: "Sponsor must be an active distributor. Use their Member ID or a valid PIN." });
     }
     const placement = await placeUnderSponsor(sponsor.id);
     const plainPassword = generatePassword();
@@ -108,7 +181,7 @@ export async function registerRoutes(app: FastifyInstance) {
         phone,
         panNumber,
         kycStatus: "PENDING",
-        password: await bcrypt.hash(plainPassword, 10),
+        password: await bcrypt.hash(plainPassword, 12),
         issuedPassword: plainPassword,
         memberCode: await nextMemberCode(),
         sponsorId: sponsor.id,
@@ -145,13 +218,26 @@ export async function registerRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post(
+    "/auth/login",
+    {
+      config: {
+        rateLimit: { max: 12, timeWindow: "1 minute" },
+      },
+    },
+    async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Enter Member ID and password." });
     }
-    const member = await prisma.member.findUnique({
-      where: { memberCode: parsed.data.memberCode.trim().toUpperCase() },
+    const loginId = (parsed.data.memberCode ?? parsed.data.phone ?? "").trim();
+    if (!loginId) {
+      return reply.code(400).send({ error: "Enter Member ID or phone, and password." });
+    }
+    const member = await prisma.member.findFirst({
+      where: {
+        OR: [{ memberCode: loginId.toUpperCase() }, { phone: loginId }],
+      },
     });
     if (!member || !(await bcrypt.compare(parsed.data.password, member.password))) {
       return reply.code(401).send({ error: "Incorrect Member ID or password." });
@@ -241,6 +327,49 @@ export async function registerRoutes(app: FastifyInstance) {
         matched: false,
       },
     };
+  });
+
+  app.get("/member/team", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    return memberTeamSummary(member.id);
+  });
+
+  app.get("/member/weekly-payouts", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    return prisma.weeklyPayout.findMany({
+      where: { memberId: member.id },
+      orderBy: { weekStart: "desc" },
+    });
+  });
+
+  app.patch("/member/bank", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const body = z
+      .object({
+        accountName: z.string().min(2),
+        bankName: z.string().min(2),
+        accountNumber: z.string().min(6),
+        ifsc: z.string().min(4),
+        upiId: z.string().optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Enter bank name, account holder, account number, and IFSC." });
+    }
+    const updated = await prisma.member.update({
+      where: { id: member.id },
+      data: {
+        accountName: body.data.accountName.trim(),
+        bankName: body.data.bankName.trim(),
+        accountNumber: body.data.accountNumber.trim(),
+        ifsc: body.data.ifsc.trim().toUpperCase(),
+        upiId: body.data.upiId?.trim() || null,
+      },
+    });
+    return publicMember(updated, { includePan: true });
   });
 
   app.get("/member/wallet", async (request, reply) => {
@@ -919,6 +1048,151 @@ export async function registerRoutes(app: FastifyInstance) {
     });
   });
 
+  app.get("/admin/members/:id/report", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    const { id } = request.params as { id: string };
+    const member = await prisma.member.findUnique({
+      where: { id },
+      include: {
+        wallet: { include: { ledger: { orderBy: { createdAt: "desc" } } } },
+        payments: { orderBy: { createdAt: "desc" } },
+        orders: { include: { product: true }, orderBy: { createdAt: "desc" } },
+        weeklyPayouts: { orderBy: { weekStart: "desc" } },
+        sponsor: { select: { name: true, memberCode: true } },
+        parent: { select: { name: true, memberCode: true } },
+      },
+    });
+    if (!member || member.role !== "MEMBER") {
+      return reply.code(404).send({ error: "Member not found." });
+    }
+    const team = await memberTeamSummary(member.id);
+    return {
+      member: publicMember(member, { includePan: true }),
+      sponsor: member.sponsor,
+      parent: member.parent,
+      wallet: member.wallet,
+      payments: member.payments,
+      orders: member.orders,
+      weeklyPayouts: member.weeklyPayouts,
+      team,
+    };
+  });
+
+  app.get("/admin/weekly-payouts", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    const q = request.query as { status?: string; weekStart?: string };
+    return prisma.weeklyPayout.findMany({
+      where: {
+        ...(q.status ? { status: q.status } : {}),
+        ...(q.weekStart ? { weekStart: q.weekStart } : {}),
+      },
+      include: {
+        member: {
+          select: {
+            name: true,
+            memberCode: true,
+            phone: true,
+            status: true,
+            accountName: true,
+            bankName: true,
+            accountNumber: true,
+            ifsc: true,
+            upiId: true,
+          },
+        },
+      },
+      orderBy: [{ weekStart: "desc" }, { generatedAmount: "desc" }],
+    });
+  });
+
+  app.get("/admin/weekly-payouts/export", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    const rows = await prisma.weeklyPayout.findMany({
+      include: { member: true },
+      orderBy: { weekStart: "desc" },
+    });
+    const csv = [
+      [
+        "id",
+        "weekStart",
+        "weekEnd",
+        "memberCode",
+        "name",
+        "phone",
+        "generatedAmount",
+        "matchingAmount",
+        "retailAmount",
+        "downlineTotal",
+        "status",
+        "accountNumber",
+        "ifsc",
+      ].join(","),
+      ...rows.map((r) =>
+        [
+          r.id,
+          r.weekStart,
+          r.weekEnd,
+          r.member.memberCode,
+          csvCell(r.member.name),
+          r.member.phone,
+          r.generatedAmount,
+          r.matchingAmount,
+          r.retailAmount,
+          r.downlineTotal,
+          r.status,
+          csvCell(r.member.accountNumber ?? ""),
+          csvCell(r.member.ifsc ?? ""),
+        ].join(","),
+      ),
+    ].join("\n");
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", "attachment; filename=weekly-payouts.csv");
+    return csv;
+  });
+
+  app.post("/admin/weekly-payouts/generate", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    const body = z.object({ weekStart: z.string().optional() }).safeParse(request.body ?? {});
+    const weekStart = body.success ? body.data.weekStart : undefined;
+    return generateWeeklyReports(weekStart);
+  });
+
+  app.patch("/admin/weekly-payouts/:id/approve", async (request, reply) => {
+    const admin = await requireRole(request, reply, "ADMIN");
+    if (!admin) return;
+    const { id } = request.params as { id: string };
+    try {
+      return await approveWeeklyPayout(id, admin.id);
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : "Could not approve." });
+    }
+  });
+
+  app.patch("/admin/weekly-payouts/:id/reject", async (request, reply) => {
+    const admin = await requireRole(request, reply, "ADMIN");
+    if (!admin) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ adminNote: z.string().min(2) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Add a note so the member knows why payout was held." });
+    }
+    const payout = await prisma.weeklyPayout.findUnique({ where: { id } });
+    if (!payout) return reply.code(404).send({ error: "Weekly report not found." });
+    if (payout.status === "APPROVED") {
+      return reply.code(400).send({ error: "Approved weekly payouts cannot be rejected." });
+    }
+    return prisma.weeklyPayout.update({
+      where: { id },
+      data: {
+        status: "REJECTED",
+        adminNote: body.data.adminNote,
+        reviewedBy: admin.id,
+        reviewedAt: new Date(),
+      },
+    });
+  });
+
   app.get("/admin/payouts/export", async (request, reply) => {
     if (!(await requireRole(request, reply, "ADMIN"))) return;
     const rows = await prisma.ledgerEntry.findMany({
@@ -977,6 +1251,33 @@ export async function registerRoutes(app: FastifyInstance) {
       .safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "Check plan values." });
     return prisma.planConfig.update({ where: { id: "default" }, data: body.data });
+  });
+
+  app.get("/admin/company", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    await ensurePlanAndCatalog();
+    return prisma.companySettings.findUniqueOrThrow({ where: { id: "default" } });
+  });
+
+  app.patch("/admin/company", async (request, reply) => {
+    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    const body = z
+      .object({
+        companyName: z.string().min(2),
+        accountName: z.string(),
+        bankName: z.string(),
+        accountNumber: z.string(),
+        ifsc: z.string(),
+        upiId: z.string(),
+        contactEmail: z.string(),
+        contactPhone: z.string(),
+      })
+      .safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Check company bank and contact details." });
+    return prisma.companySettings.update({
+      where: { id: "default" },
+      data: { ...body.data, ifsc: body.data.ifsc.trim().toUpperCase() },
+    });
   });
 
   app.get("/admin/products", async (request, reply) => {

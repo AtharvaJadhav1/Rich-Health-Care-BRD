@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, clearToken, getToken, persistToken } from "@/lib/api";
 
 export type Member = {
@@ -18,6 +18,11 @@ export type Member = {
   position: string | null;
   activatedAt: string | null;
   createdAt: string;
+  accountName?: string | null;
+  bankName?: string | null;
+  accountNumber?: string | null;
+  ifsc?: string | null;
+  upiId?: string | null;
 };
 
 export type IssuedCredentials = { memberCode: string; password: string };
@@ -30,8 +35,9 @@ type AuthState = {
   register: (input: {
     name: string;
     phone: string;
-    panNumber: string;
+    panNumber?: string;
     pinCode?: string;
+    sponsorCode?: string;
   }) => Promise<{ member: Member; credentials: IssuedCredentials }>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -43,9 +49,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionRef = useRef(0);
 
-  async function loadFromToken(nextToken: string) {
+  async function loadFromToken(nextToken: string, session: number) {
     const data = await api<{ member: Member }>("/member/me", { token: nextToken });
+    if (session !== sessionRef.current) return;
     setMember(data.member);
   }
 
@@ -55,14 +63,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
+    const session = ++sessionRef.current;
     setToken(stored);
-    loadFromToken(stored)
+    loadFromToken(stored, session)
       .catch(() => {
+        if (session !== sessionRef.current) return;
         clearToken();
         setToken(null);
         setMember(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (session !== sessionRef.current) return;
+        setLoading(false);
+      });
   }, []);
 
   const value = useMemo<AuthState>(
@@ -71,6 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       member,
       loading,
       async login(memberCode, password) {
+        const session = ++sessionRef.current;
         const data = await api<{ token: string; member: Member }>("/auth/login", {
           method: "POST",
           body: { memberCode, password },
@@ -78,6 +92,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         persistToken(data.token);
         setToken(data.token);
         setMember(data.member);
+        setLoading(false);
+        void session;
         return data.member;
       },
       async register(input) {

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -29,12 +29,18 @@ model Member {
   rank           String?
   status         String             @default("PENDING_PAYMENT")
   activatedAt    DateTime?
+  accountName    String?
+  bankName       String?
+  accountNumber  String?
+  ifsc           String?
+  upiId          String?
   wallet         Wallet?
   volumes        BinaryVolume[]
   orders         Order[]
   payments       PaymentSubmission[]
   kycSubmissions KycSubmission[]
   pinsOwned      Pin[]              @relation("PinOwner")
+  weeklyPayouts  WeeklyPayout[]
   createdAt      DateTime           @default(now())
 }
 
@@ -167,4 +173,39 @@ model PlanConfig {
   gstPercent          Int
   adminCutPercent     Int
   retailIncomePerUnit Int
+}
+
+model CompanySettings {
+  id             String @id
+  companyName    String
+  accountName    String @default("")
+  bankName       String @default("")
+  accountNumber  String @default("")
+  ifsc           String @default("")
+  upiId          String @default("")
+  rootMemberCode String @default("")
+  contactEmail   String @default("")
+  contactPhone   String @default("")
+}
+
+model WeeklyPayout {
+  id              String    @id @default(cuid())
+  memberId        String
+  member          Member    @relation(fields: [memberId], references: [id])
+  weekStart       String
+  weekEnd         String
+  generatedAmount Int
+  matchingAmount  Int       @default(0)
+  retailAmount    Int       @default(0)
+  downlineTotal   Int       @default(0)
+  downlineActive  Int       @default(0)
+  downlinePending Int       @default(0)
+  teamReport      String    @default("[]")
+  status          String    @default("PENDING")
+  adminNote       String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([memberId, weekStart])
 }

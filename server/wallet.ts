@@ -2,7 +2,7 @@ import { prisma } from "./db";
 
 export async function creditWallet(params: {
   memberId: string;
-  type: "RETAIL_INCOME" | "MATCHING_INCOME" | "JOINING_CREDIT";
+  type: "RETAIL_INCOME" | "MATCHING_INCOME" | "JOINING_CREDIT" | "WEEKLY_PAYOUT";
   amount: number;
   note?: string;
   grossAmount?: number;

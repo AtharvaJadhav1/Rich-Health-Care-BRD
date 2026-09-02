@@ -13,7 +13,8 @@ export function getToken() {
 
 export function persistToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
-  document.cookie = `${TOKEN_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${TOKEN_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`;
 }
 
 export function clearToken() {

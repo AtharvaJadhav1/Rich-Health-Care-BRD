@@ -34,7 +34,7 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
     upstream = await fetch(target, init);
   } catch {
     return NextResponse.json(
-      { error: "The API server is not reachable. Start Fastify on port 43124." },
+      { error: "The application is still starting. Try again in a few seconds." },
       { status: 502 },
     );
   }

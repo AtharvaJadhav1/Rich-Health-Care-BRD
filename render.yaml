@@ -1,0 +1,23 @@
+# Website on Render. Database stays on Railway Postgres (public URL).
+# Dashboard: New → Blueprint → this repo, then paste DATABASE_URL in the service env.
+# After first deploy: open https://<service>.onrender.com/setup
+services:
+  - type: web
+    name: rich-health-care
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: "43124"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false

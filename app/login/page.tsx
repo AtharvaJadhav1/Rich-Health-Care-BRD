@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,14 @@ export default function LoginPage() {
   const [memberCode, setMemberCode] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api<{ needsSetup: boolean }>("/public/status")
+      .then((s) => {
+        if (s.needsSetup) router.replace("/setup");
+      })
+      .catch(() => {});
+  }, [router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -36,7 +45,7 @@ export default function LoginPage() {
       <div>
         <h1 className="font-heading text-3xl font-semibold">Sign in</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Demo distributor: RHC0001 / Member@123 · Admin: ADMIN / Admin@123
+          Use the Member ID and password issued at registration. Passwords are case-sensitive.
         </p>
       </div>
       <Card>
@@ -51,6 +60,7 @@ export default function LoginPage() {
                 id="memberCode"
                 value={memberCode}
                 onChange={(e) => setMemberCode(e.target.value.toUpperCase())}
+                autoComplete="username"
                 required
               />
             </div>
@@ -61,6 +71,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 required
               />
             </div>

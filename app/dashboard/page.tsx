@@ -58,6 +58,48 @@ type Order = {
 
 type Product = { id: string; name: string; dp: number; stock: number; active: boolean };
 
+type CompanyBank = {
+  accountName: string;
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  upiId: string;
+};
+
+type TeamSummary = {
+  weekStart: string;
+  weekEnd: string;
+  downlineCount: number;
+  downlineActive: number;
+  downlinePending: number;
+  downlineBlocked: number;
+  generatedThisWeek: number;
+  matchingThisWeek: number;
+  retailThisWeek: number;
+  lifetimeGenerated: number;
+  walletBalance: number;
+  downline: {
+    id: string;
+    name: string;
+    memberCode: string;
+    phone: string;
+    status: string;
+    position: string | null;
+    joiningPaymentStatus: string | null;
+    generatedAmount: number;
+    walletBalance: number;
+  }[];
+  weeklyPayouts: {
+    id: string;
+    weekStart: string;
+    weekEnd: string;
+    generatedAmount: number;
+    downlineTotal: number;
+    status: string;
+    adminNote: string | null;
+  }[];
+};
+
 export default function DashboardPage() {
   return (
     <RequireAuth>
@@ -83,6 +125,7 @@ function DashboardInner() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [team, setTeam] = useState<TeamSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joiningRef, setJoiningRef] = useState("");
   const [orderQty, setOrderQty] = useState(1);
@@ -90,16 +133,26 @@ function DashboardInner() {
   const [orderRef, setOrderRef] = useState("");
   const [ledgerType, setLedgerType] = useState("ALL");
   const [joiningAmount, setJoiningAmount] = useState(999);
+  const [companyBank, setCompanyBank] = useState<CompanyBank | null>(null);
+  const [bankForm, setBankForm] = useState({
+    accountName: "",
+    bankName: "",
+    accountNumber: "",
+    ifsc: "",
+    upiId: "",
+  });
 
   async function load() {
     try {
-      const [w, t, p, o, catalog, plan] = await Promise.all([
+      const [w, t, p, o, catalog, plan, teamData, status] = await Promise.all([
         api<Wallet>("/member/wallet"),
         api<{ tree: TreeNode; volume: never }>("/member/tree"),
         api<Payment[]>("/member/payments"),
         api<Order[]>("/member/orders"),
         api<Product[]>("/products"),
         api<{ joiningAmount: number }>("/plan"),
+        api<TeamSummary>("/member/team"),
+        api<{ collectionBank: CompanyBank }>("/public/status"),
       ]);
       setWallet(w);
       setTree(t as never);
@@ -108,6 +161,8 @@ function DashboardInner() {
       setProducts(catalog);
       if (!productId && catalog[0]) setProductId(catalog[0].id);
       setJoiningAmount(plan.joiningAmount);
+      setTeam(teamData);
+      setCompanyBank(status.collectionBank);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load dashboard");
@@ -118,6 +173,17 @@ function DashboardInner() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!member) return;
+    setBankForm({
+      accountName: member.accountName ?? "",
+      bankName: member.bankName ?? "",
+      accountNumber: member.accountNumber ?? "",
+      ifsc: member.ifsc ?? "",
+      upiId: member.upiId ?? "",
+    });
+  }, [member]);
 
   const filteredLedger = useMemo(() => {
     if (!wallet) return [];
@@ -174,7 +240,7 @@ function DashboardInner() {
   if (error) {
     return <p className="px-4 py-16 text-center text-destructive">{error}</p>;
   }
-  if (!member || !wallet || !tree) {
+  if (!member || !wallet || !tree || !team) {
     return <p className="px-4 py-16 text-center text-muted-foreground">Loading dashboard…</p>;
   }
 
@@ -198,9 +264,23 @@ function DashboardInner() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Transfer {inr(joiningAmount)} and submit the UTR. You stay off the matching count until an admin
-              approves this.
+              Transfer {inr(joiningAmount)} to the company account below, then submit the bank UTR. You stay off
+              matching until admin confirms the money.
             </p>
+            {companyBank?.accountNumber ? (
+              <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                <p>
+                  {companyBank.accountName} · {companyBank.bankName}
+                </p>
+                <p className="font-mono">A/c {companyBank.accountNumber}</p>
+                <p className="font-mono">IFSC {companyBank.ifsc}</p>
+                {companyBank.upiId ? <p>UPI {companyBank.upiId}</p> : null}
+              </div>
+            ) : (
+              <p className="text-sm text-destructive">
+                Company bank is not set yet. Ask admin to save it under Plan config.
+              </p>
+            )}
             {pendingJoining ? (
               <p>Reference {pendingJoining.referenceNo} is waiting for review.</p>
             ) : (
@@ -253,7 +333,7 @@ function DashboardInner() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{inr(wallet.balance)}</p>
-            <p className="text-sm text-muted-foreground">Sum of append-only ledger entries</p>
+            <p className="text-sm text-muted-foreground">Available until weekly payout is approved</p>
           </CardContent>
         </Card>
         <Card>
@@ -274,6 +354,41 @@ function DashboardInner() {
             <p className="text-sm text-muted-foreground">Share this ID so others can receive PIN transfers.</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Team under you</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">{team.downlineCount}</p>
+            <p className="text-sm text-muted-foreground">
+              {team.downlineActive} active · {team.downlinePending} awaiting joining payment
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated this week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">{inr(team.generatedThisWeek)}</p>
+            <p className="text-sm text-muted-foreground">
+              {team.weekStart} to {team.weekEnd} · lifetime {inr(team.lifetimeGenerated)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Weekly payout</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">
+              {team.weeklyPayouts[0]?.status.replaceAll("_", " ") ?? "Not generated"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Admin reviews each member report every week before releasing payment.
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -288,6 +403,9 @@ function DashboardInner() {
       <Tabs defaultValue="ledger">
         <TabsList>
           <TabsTrigger value="ledger">Transactions</TabsTrigger>
+          <TabsTrigger value="team">My team</TabsTrigger>
+          <TabsTrigger value="weekly">Weekly payouts</TabsTrigger>
+          <TabsTrigger value="bank">My bank</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
         </TabsList>
@@ -300,7 +418,7 @@ function DashboardInner() {
               <SelectContent>
                 <SelectItem value="ALL">All types</SelectItem>
                 <SelectItem value="RETAIL_INCOME">Retail income</SelectItem>
-                <SelectItem value="MATCHING_INCOME">Matching income</SelectItem>
+                <SelectItem value="WEEKLY_PAYOUT">Weekly payout</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -336,6 +454,109 @@ function DashboardInner() {
               </table>
             </div>
           )}
+        </TabsContent>
+        <TabsContent value="team" className="space-y-4 pt-4">
+          <p className="text-sm text-muted-foreground">
+            Everyone placed under you in the binary tree, with joining payment status and how much they have generated.
+          </p>
+          {team.downline.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No members under you yet. Share your sponsor code.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-muted-foreground">
+                  <tr>
+                    <th className="py-2">Member</th>
+                    <th>Leg</th>
+                    <th>Account</th>
+                    <th>Joining payment</th>
+                    <th>Generated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {team.downline.map((row) => (
+                    <tr key={row.id} className="border-t">
+                      <td className="py-2">
+                        <p className="font-medium">{row.name}</p>
+                        <p className="text-muted-foreground">
+                          {row.memberCode} · {row.phone}
+                        </p>
+                      </td>
+                      <td>{row.position ?? "—"}</td>
+                      <td>
+                        <Badge variant={row.status === "ACTIVE" ? "default" : "secondary"}>
+                          {row.status.replaceAll("_", " ")}
+                        </Badge>
+                      </td>
+                      <td>{row.joiningPaymentStatus ?? "Not submitted"}</td>
+                      <td>{inr(row.generatedAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="weekly" className="space-y-4 pt-4">
+          {team.weeklyPayouts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No weekly reports yet. After matching runs, admin generates this week&apos;s payout reports and approves
+              them.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {team.weeklyPayouts.map((row) => (
+                <li key={row.id} className="rounded-lg border p-3">
+                  <div className="flex justify-between gap-3">
+                    <span>
+                      {row.weekStart} → {row.weekEnd} · {inr(row.generatedAmount)} · {row.downlineTotal} in team
+                    </span>
+                    <Badge variant={row.status === "APPROVED" ? "default" : "secondary"}>{row.status}</Badge>
+                  </div>
+                  {row.adminNote ? <p className="text-muted-foreground">Admin: {row.adminNote}</p> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
+        <TabsContent value="bank" className="space-y-4 pt-4">
+          <p className="text-sm text-muted-foreground">
+            Weekly payouts are transferred to this account after admin approval. Keep IFSC and account number
+            correct.
+          </p>
+          <form
+            className="grid max-w-xl gap-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await api("/member/bank", { method: "PATCH", body: bankForm });
+                toast.success("Bank details saved");
+                await load();
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not save bank");
+              }
+            }}
+          >
+            {(
+              [
+                ["accountName", "Account holder"],
+                ["bankName", "Bank name"],
+                ["accountNumber", "Account number"],
+                ["ifsc", "IFSC"],
+                ["upiId", "UPI (optional)"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-2">
+                <Label>{label}</Label>
+                <Input
+                  value={bankForm[key]}
+                  onChange={(e) => setBankForm({ ...bankForm, [key]: e.target.value })}
+                  required={key !== "upiId"}
+                />
+              </div>
+            ))}
+            <Button type="submit">Save payout bank</Button>
+          </form>
         </TabsContent>
         <TabsContent value="orders" className="space-y-6 pt-4">
           {member.status === "ACTIVE" ? (

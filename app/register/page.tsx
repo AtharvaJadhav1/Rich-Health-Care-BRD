@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +23,16 @@ export default function RegisterPage() {
     phone: "",
     panNumber: "",
     pinCode: "",
+    sponsorCode: "",
   });
+
+  useEffect(() => {
+    api<{ needsSetup: boolean }>("/public/status")
+      .then((s) => {
+        if (s.needsSetup) router.replace("/setup");
+      })
+      .catch(() => {});
+  }, [router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -33,6 +43,7 @@ export default function RegisterPage() {
         phone: form.phone,
         panNumber: form.panNumber,
         pinCode: form.pinCode || undefined,
+        sponsorCode: form.sponsorCode || undefined,
       });
       setCredentials(result.credentials);
       toast.success("Account created. Save your Member ID and password now.");
@@ -98,6 +109,12 @@ export default function RegisterPage() {
               label="PAN number"
               value={form.panNumber}
               onChange={(panNumber) => setForm({ ...form, panNumber: panNumber.toUpperCase() })}
+            />
+            <Field
+              label="Sponsor Member ID (optional)"
+              value={form.sponsorCode}
+              onChange={(sponsorCode) => setForm({ ...form, sponsorCode: sponsorCode.toUpperCase() })}
+              required={false}
             />
             <Field
               label="PIN code (optional)"

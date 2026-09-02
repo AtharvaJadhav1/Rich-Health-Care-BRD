@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { RequireAuth } from "@/components/require-auth";
 import { AdminNav } from "@/components/admin-nav";
@@ -129,7 +130,10 @@ function Inner() {
                   />
                 </td>
                 <td>{inr(row.wallet?.balance ?? 0)}</td>
-                <td className="text-right">
+                <td className="text-right space-x-2">
+                  <Link href={`/admin/members/${row.id}`} className="text-sm text-primary underline">
+                    Report
+                  </Link>
                   {row.status === "BLOCKED" ? (
                     <Button variant="outline" onClick={() => setStatus(row.id, "ACTIVE")}>
                       Unblock

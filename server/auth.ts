@@ -9,6 +9,15 @@ export type AuthUser = {
   memberCode: string;
 };
 
+export function issuePassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "Rhc";
+  for (let i = 0; i < 6; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `${out}9`;
+}
+
 const JWT_SECRET = process.env.JWT_SECRET ?? "rich-health-care-dev-secret";
 
 export function signToken(user: AuthUser) {
