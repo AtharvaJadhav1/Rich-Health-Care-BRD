@@ -17,9 +17,8 @@ const serif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Rich Health Care Solution",
-  description:
-    "Ayurvedic wellness products with a binary matching plan, manual payment approval, and a member wallet.",
+  title: "Rich Health Care Ayurveda",
+  description: "Ayurvedic wellness products from Rich Health Care Ayurveda, Padgha, Bhiwandi.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

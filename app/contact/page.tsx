@@ -30,7 +30,7 @@ export default function ContactPage() {
   }
 
   const email = status?.contactEmail?.trim();
-  const phone = status?.contactPhone?.trim() || "9867032655";
+  const phone = status?.contactPhone?.trim() || "9307116704";
 
   return (
     <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2">
@@ -39,11 +39,13 @@ export default function ContactPage() {
         <h1 className="font-heading mt-2 text-4xl font-semibold">Talk to the desk</h1>
         <p className="mt-4 text-muted-foreground">
           For joining, payment confirmation, or product supply, write to{" "}
-          {status?.companyName ?? "Rich Health Care Solution"}.
+          {status?.companyName ?? "Rich Health Care Ayurveda"}.
           Payments are confirmed by UTR: include your Member ID and bank reference if you are following up on a
           transfer.
         </p>
         <div className="mt-8 space-y-2 text-sm">
+          <p className="font-medium">Rich Health Care Ayurveda</p>
+          <p>Office No. 2, 1st Floor, Patil Complex, near Maharashtra Bank, Padgha, Bhiwandi, 421101</p>
           {email ? <p>Email: {email}</p> : null}
           {phone ? <p>Call / WhatsApp: {phone}</p> : null}
           {!email && !status?.contactPhone ? (

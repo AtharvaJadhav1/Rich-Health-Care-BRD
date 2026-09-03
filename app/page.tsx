@@ -1,132 +1,54 @@
-import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { inr } from "@/lib/money";
+import { ProductSlideshow } from "@/components/product-slideshow";
 
-const steps = [
-  { title: "Join with PAN", body: "Register with your name, phone, and PAN. We issue your Member ID and password." },
-  { title: "Pay ₹999 or use a PIN", body: "Submit a UTR, or consume a PIN. Nothing counts until that step completes." },
-  { title: "Build both legs", body: "New active members spill over left-first. Matching pairs at ₹225 net, 10 pairs a day." },
-];
-
-type Product = {
-  id: string;
-  name: string;
-  description: string | null;
-  dp: number;
-  mrp: number;
-  imageUrl: string | null;
-};
-
-const API_ORIGIN = process.env.API_ORIGIN ?? `http://127.0.0.1:${process.env.API_PORT ?? "43124"}`;
-
-async function loadProducts(): Promise<Product[]> {
-  try {
-    const res = await fetch(`${API_ORIGIN}/products`, { cache: "no-store" });
-    if (!res.ok) return [];
-    return (await res.json()) as Product[];
-  } catch {
-    return [];
-  }
-}
-
-export default async function HomePage() {
-  const products = await loadProducts();
-
+export default function HomePage() {
   return (
-    <div>
-      <section className="border-b bg-[radial-gradient(circle_at_top,_oklch(0.93_0.05_145),_transparent_55%)]">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2 md:items-center md:py-24">
-          <div className="space-y-6">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">
-              Ayurveda · Direct selling
-            </p>
-            <h1 className="font-heading text-4xl leading-tight font-semibold md:text-5xl">
-              Rich Health Care Solution. Herbal products. A pairing plan you can audit.
-            </h1>
-            <p className="max-w-xl text-lg text-muted-foreground">
-              Distributors join at ₹999, sell the Ayurvedic catalog, and earn matching income only after
-              payments are approved. Carry-forward is automatic. The 10-pair daily cap is enforced in the
-              engine, not on a slide.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/register" className={buttonVariants({ size: "lg" })}>
-                Become a distributor
-              </Link>
-              <Link href="/products" className={buttonVariants({ size: "lg", variant: "outline" })}>
-                View products
-              </Link>
-            </div>
-          </div>
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Plan snapshot</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 text-sm">
-              <Row k="Joining amount" v="₹999 (UTR or PIN)" />
-              <Row k="Distributor price" v="₹999" />
-              <Row k="MRP" v="₹1,499" />
-              <Row k="Retail income" v="₹500 per unit, after approval" />
-              <Row k="Matching (gross)" v="₹250 per pair" />
-              <Row k="GST + admin cut" v="5% + 5%" />
-              <Row k="Matching (net)" v="₹225 per pair" />
-              <Row k="Daily cap" v="10 pairs · ₹2,250 net" />
-              <Row k="Weekly payouts" v="Admin-approved, Monday–Sunday IST" />
-            </CardContent>
-          </Card>
-        </div>
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-10">
+      <section className="overflow-hidden rounded-xl border">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/branding/ayurveda-symbol.jpg"
+          alt="Ayurveda — herbal preparation with traditional herbs"
+          className="h-[220px] w-full object-cover sm:h-[320px] lg:h-[420px]"
+        />
       </section>
-      <section className="mx-auto max-w-6xl space-y-6 px-4 py-16">
+
+      <section className="mt-5 sm:mt-8">
+        <ProductSlideshow />
+      </section>
+
+      <section className="mt-8 space-y-6 sm:mt-12">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Products</p>
-          <h2 className="font-heading mt-2 text-3xl font-semibold">Catalog at distributor price</h2>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
-            Names, photos, DP and MRP come from the live Rich Health Care catalog.
+          <h1 className="font-heading text-2xl font-semibold sm:text-4xl">
+            Welcome to Rich Health Care Ayurveda
+          </h1>
+        </div>
+
+        <div className="space-y-3">
+          <h2 className="font-heading text-xl font-semibold sm:text-2xl">Company profile</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            Rich Health Care Ayurveda is an Ayurvedic wellness company. We prepare herbal juices, powders,
+            oils, soaps, shampoo, and personal-care products from traditional herbs. Our work is rooted in
+            Ayurveda and daily wellness, with products supplied across India for retail and distributor
+            partners.
           </p>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((product) => (
-            <Card key={product.id}>
-              {product.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={product.imageUrl} alt="" className="h-52 w-full rounded-t-xl bg-white object-contain p-2" />
-              ) : (
-                <div className="flex h-40 items-center justify-center rounded-t-xl bg-muted text-sm text-muted-foreground">
-                  Photo pending
-                </div>
-              )}
-              <CardHeader>
-                <CardTitle className="text-lg">{product.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm text-muted-foreground">{product.description}</p>
-                <p className="text-sm text-muted-foreground line-through">{inr(product.mrp)} MRP</p>
-                <p className="text-xl font-semibold">{inr(product.dp)} DP</p>
-              </CardContent>
-            </Card>
-          ))}
+
+        <div className="space-y-3 pb-8">
+          <h2 className="font-heading text-xl font-semibold sm:text-2xl">Contact us</h2>
+          <div className="space-y-1 text-muted-foreground leading-relaxed">
+            <p className="font-medium text-foreground">Rich Health Care Ayurveda</p>
+            <p>
+              Office No. 2, 1st Floor, Patil Complex, near Maharashtra Bank, Padgha, Bhiwandi, 421101
+            </p>
+            <p>
+              Mobile:{" "}
+              <a className="text-primary" href="tel:9307116704">
+                9307116704
+              </a>
+            </p>
+          </div>
         </div>
       </section>
-      <section className="mx-auto grid max-w-6xl gap-6 px-4 pb-16 md:grid-cols-3">
-        {steps.map((step, i) => (
-          <Card key={step.title}>
-            <CardHeader>
-              <p className="text-xs font-medium text-primary">0{i + 1}</p>
-              <CardTitle>{step.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-muted-foreground">{step.body}</CardContent>
-          </Card>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b py-2 last:border-0">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="text-right font-medium">{v}</span>
     </div>
   );
 }

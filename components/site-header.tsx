@@ -59,113 +59,90 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+      <div className="mx-auto grid h-[4.75rem] w-full max-w-5xl grid-cols-[auto_1fr_auto] items-center gap-2 px-3 sm:h-24 sm:gap-4 sm:px-4">
+        <Link href="/" className="shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.jpg" alt="Rich Health Care Solution" className="size-10 rounded-full object-cover" />
-          <span className="leading-tight">
-            Rich Health Care
-            <span className="block text-[10px] font-medium tracking-wide text-muted-foreground">Ayurveda</span>
+          <img
+            src="/logo.jpg"
+            alt="Rich Health Care Ayurveda"
+            className="size-14 rounded-full object-cover sm:size-[4.5rem]"
+          />
+        </Link>
+        <Link href="/" className="min-w-0 text-center">
+          <span className="font-heading block text-sm font-semibold leading-tight sm:text-xl md:text-2xl">
+            Rich Health Care Ayurveda
           </span>
         </Link>
-        <nav className="hidden items-center gap-5 text-sm md:flex">
-          {memberLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={
-                pathname === link.href || (link.href === "/kyc" && pathname.startsWith("/kyc"))
-                  ? "inline-flex items-center gap-1.5 font-medium text-primary"
-                  : "inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
-              }
-            >
-              {link.label}
-              {link.href === "/kyc" && member ? (
-                <Badge variant={member.kycStatus === "VERIFIED" ? "default" : "secondary"} className="h-5 px-1.5 text-[10px]">
-                  {kycBadge(member.kycStatus)}
-                </Badge>
-              ) : null}
-            </Link>
-          ))}
-          {member && member.role !== "ADMIN" ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
+        <div className="flex items-center justify-end gap-1">
+          <nav className="mr-1 hidden items-center gap-4 text-sm lg:flex">
+            {memberLinks.slice(0, 4).map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
                 className={
-                  pathname.startsWith("/pins")
-                    ? "inline-flex items-center gap-1 font-medium text-primary"
-                    : "inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                  pathname === link.href
+                    ? "font-medium text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 }
               >
-                PIN <ChevronDown className="size-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {pinLinks.map((link) => (
-                  <DropdownMenuItem key={link.href} onClick={() => router.push(link.href)}>
-                    {link.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </nav>
-        <div className="hidden items-center gap-2 md:flex">
-          {member ? (
-            <>
-              <span className="text-sm text-muted-foreground">{member.memberCode}</span>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  logout();
-                  router.push("/");
-                }}
-              >
-                Sign out
-              </Button>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className={buttonVariants({ variant: "ghost" })}>
-                Sign in
-              </Link>
-              <Link href="/register" className={buttonVariants()}>
-                Join
-              </Link>
-            </>
-          )}
-        </div>
-        <Sheet>
-          <SheetTrigger className="md:hidden" render={<Button variant="ghost" size="icon" />}>
-            <Menu className="size-5" />
-          </SheetTrigger>
-          <SheetContent className="flex flex-col gap-4 p-6">
-            {memberLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="text-lg">
                 {link.label}
               </Link>
             ))}
-            {member && member.role !== "ADMIN"
-              ? pinLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className="text-lg">
-                    {link.label}
+          </nav>
+          <Sheet>
+            <SheetTrigger render={<Button variant="ghost" size="icon" className="size-11" />}>
+              <Menu className="size-6" />
+            </SheetTrigger>
+            <SheetContent className="flex flex-col gap-4 p-6">
+              {memberLinks.map((link) => (
+                <Link key={link.href} href={link.href} className="text-lg">
+                  {link.label}
+                  {link.href === "/kyc" && member ? (
+                    <Badge
+                      variant={member.kycStatus === "VERIFIED" ? "default" : "secondary"}
+                      className="ml-2 h-5 px-1.5 text-[10px]"
+                    >
+                      {kycBadge(member.kycStatus)}
+                    </Badge>
+                  ) : null}
+                </Link>
+              ))}
+              {member && member.role !== "ADMIN" ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="inline-flex items-center gap-1 text-lg">
+                    PIN <ChevronDown className="size-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {pinLinks.map((link) => (
+                      <DropdownMenuItem key={link.href} onClick={() => router.push(link.href)}>
+                        {link.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {member ? (
+                <Button
+                  onClick={() => {
+                    logout();
+                    router.push("/");
+                  }}
+                >
+                  Sign out
+                </Button>
+              ) : (
+                <>
+                  <Link href="/login" className={buttonVariants({ variant: "outline" })}>
+                    Sign in
                   </Link>
-                ))
-              : null}
-            {member ? (
-              <Button
-                onClick={() => {
-                  logout();
-                  router.push("/");
-                }}
-              >
-                Sign out
-              </Button>
-            ) : (
-              <Link href={isApp ? "/login" : "/register"} className={buttonVariants()}>
-                {isApp ? "Sign in" : "Become a distributor"}
-              </Link>
-            )}
-          </SheetContent>
-        </Sheet>
+                  <Link href={isApp ? "/login" : "/register"} className={buttonVariants()}>
+                    {isApp ? "Sign in" : "Join"}
+                  </Link>
+                </>
+              )}
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
     </header>
   );

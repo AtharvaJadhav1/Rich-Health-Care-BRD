@@ -137,14 +137,14 @@ export async function ensurePlanAndCatalog() {
     create: {
       id: "default",
       companyName: "Rich Health Care Solution",
-      contactPhone: "9867032655",
+      contactPhone: "9307116704",
     },
   });
   const settings = await prisma.companySettings.findUniqueOrThrow({ where: { id: "default" } });
   if (!settings.contactPhone) {
     await prisma.companySettings.update({
       where: { id: "default" },
-      data: { contactPhone: "9867032655" },
+      data: { contactPhone: "9307116704" },
     });
   }
   await prisma.product.updateMany({
