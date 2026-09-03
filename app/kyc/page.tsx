@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PageHero, PageShell } from "@/components/page-shell";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
@@ -109,15 +110,16 @@ function Inner() {
   const pending = data.submissions.some((s) => s.status === "PENDING");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold">KYC &amp; bank</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Submit PAN for verification and save your payout bank account for weekly transfers.
-          </p>
-        </div>
-        <Badge variant={data.kycStatus === "VERIFIED" ? "default" : "secondary"}>{data.kycStatus}</Badge>
+    <PageShell width="3xl" className="space-y-6">
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <PageHero
+          className="mb-0 min-w-0 flex-1"
+          title="KYC & bank"
+          description="Submit PAN for verification and save your payout bank account for weekly transfers."
+        />
+        <Badge variant={data.kycStatus === "VERIFIED" ? "default" : "secondary"} className="shrink-0">
+          {data.kycStatus}
+        </Badge>
       </div>
 
       <Card>
@@ -219,6 +221,6 @@ function Inner() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

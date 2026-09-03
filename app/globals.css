@@ -122,9 +122,58 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .site-canvas {
+    background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -10%, oklch(0.78 0.11 145 / 0.35), transparent 55%),
+      radial-gradient(ellipse 55% 45% at 100% 0%, oklch(0.88 0.09 85 / 0.28), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 0% 100%, oklch(0.82 0.1 155 / 0.22), transparent 50%),
+      linear-gradient(180deg, oklch(0.99 0.01 145) 0%, oklch(0.97 0.015 145) 100%);
+    background-attachment: fixed;
+  }
+
+  .glass-panel {
+    @apply rounded-2xl border border-white/70 bg-card/85 shadow-lg shadow-primary/5 backdrop-blur-md;
+  }
+
+  .glass-header {
+    @apply border-b border-white/50 bg-card/80 shadow-sm shadow-primary/5 backdrop-blur-xl;
+  }
+
+  .glass-footer {
+    @apply border-t border-white/50 bg-gradient-to-b from-card/90 to-card/70 backdrop-blur-md;
+  }
+
+  .section-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-primary;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary via-emerald-700 to-emerald-600 bg-clip-text text-transparent;
+  }
+
+  .hero-gradient {
+    @apply relative overflow-hidden rounded-2xl border border-white/60 shadow-xl shadow-primary/10;
+  }
+
+  .hero-gradient::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-amber-200/30;
+  }
+
+  .nav-link {
+    @apply rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground;
+  }
+
+  .nav-link-active {
+    @apply rounded-full bg-primary/12 px-3 py-1.5 font-medium text-primary shadow-sm;
   }
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { businessModelRows, DEFAULT_PLAN } from "@/lib/business-model";
+import { PageHero, PageShell } from "@/components/page-shell";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Table,
@@ -27,27 +28,24 @@ export default async function BusinessPage() {
   const rows = businessModelRows(plan);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-16">
-      <div className="mb-10 max-w-2xl">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Business</p>
-        <h1 className="font-heading mt-2 text-4xl font-semibold">Business model summary</h1>
-        <p className="mt-3 text-muted-foreground leading-relaxed">
-          Direct-selling plan for Rich Health Care Ayurveda — joining fee, retail margin, binary matching income,
-          and daily caps. Amounts reflect the live plan configuration.
-        </p>
-      </div>
+    <PageShell width="4xl">
+      <PageHero
+        eyebrow="Business"
+        title="Business model summary"
+        description="Direct-selling plan for Rich Health Care Ayurveda — joining fee, retail margin, binary matching income, and daily caps. Amounts reflect the live plan configuration."
+      />
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="glass-panel overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[40%] px-4">Item</TableHead>
-              <TableHead className="px-4">Value</TableHead>
+            <TableRow className="bg-primary/5 hover:bg-primary/5">
+              <TableHead className="w-[40%] px-4 py-3">Item</TableHead>
+              <TableHead className="px-4 py-3">Value</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.item}>
+              <TableRow key={row.item} className="hover:bg-muted/40">
                 <TableCell className="px-4 font-medium">{row.item}</TableCell>
                 <TableCell className="px-4 whitespace-normal text-muted-foreground">{row.value}</TableCell>
               </TableRow>
@@ -56,19 +54,19 @@ export default async function BusinessPage() {
         </Table>
       </div>
 
-      <p className="mt-6 text-sm text-muted-foreground leading-relaxed">
+      <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
         Matching runs after admin approval of joining payments. Only active members count toward left/right
         totals. Unmatched volume carries forward; the daily cap is enforced in the matching job.
       </p>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-        <Link href="/register" className={buttonVariants()}>
+        <Link href="/register" className={buttonVariants({ size: "lg" })}>
           Register as distributor
         </Link>
-        <Link href="/products" className={buttonVariants({ variant: "outline" })}>
+        <Link href="/products" className={buttonVariants({ size: "lg", variant: "outline" })}>
           View products
         </Link>
       </div>
-    </div>
+    </PageShell>
   );
 }

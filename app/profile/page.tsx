@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import { toast } from "sonner";
+import { PageHero, PageShell } from "@/components/page-shell";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
 import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
@@ -131,8 +132,8 @@ function Inner() {
   const fullAddress = formatAddress(m);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-10">
-      <h1 className="font-heading text-3xl font-semibold">Profile</h1>
+    <PageShell width="6xl" className="space-y-6">
+      <PageHero title="Profile" description="Your distributor identity, photo, and account details." />
 
       <Card>
         <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
@@ -304,7 +305,7 @@ function Inner() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

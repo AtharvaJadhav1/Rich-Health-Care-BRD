@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
+import { PageHero, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,14 +102,11 @@ function RegisterForm() {
 
   if (memberCode) {
     return (
-      <div className="mx-auto flex max-w-lg flex-col gap-6 px-4 py-16">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold">Registration complete</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your Member ID is issued below. Login with the password you chose. Complete joining payment from
-            the dashboard.
-          </p>
-        </div>
+      <PageShell className="max-w-lg">
+        <PageHero
+          title="Registration complete"
+          description="Your Member ID is issued below. Login with the password you chose. Complete joining payment from the dashboard."
+        />
         <Card>
           <CardHeader>
             <CardTitle>Your Member ID</CardTitle>
@@ -122,19 +120,16 @@ function RegisterForm() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 py-10 sm:py-16">
-      <div className="mb-6">
-        <h1 className="font-heading text-3xl font-semibold">Registration</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Fill every field. Placement side must be empty under the placement ID you enter. Open slots on your
-          tree diagram pre-fill sponsor, placement, and left/right position.
-        </p>
-      </div>
+    <PageShell className="max-w-lg">
+      <PageHero
+        title="Registration"
+        description="Fill every field. Placement side must be empty under the placement ID you enter. Open slots on your tree diagram pre-fill sponsor, placement, and left/right position."
+      />
       <Card>
         <CardContent className="pt-6">
           <form className="space-y-4" onSubmit={onSubmit}>
@@ -227,7 +222,7 @@ function RegisterForm() {
           Login
         </Link>
       </p>
-    </div>
+    </PageShell>
   );
 }
 

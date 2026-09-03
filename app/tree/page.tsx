@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PageHero, PageShell } from "@/components/page-shell";
 import { RequireAuth } from "@/components/require-auth";
 import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { PinControls } from "@/components/pin-controls";
@@ -48,13 +49,11 @@ function Inner() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-10">
-      <div>
-        <h1 className="font-heading text-3xl font-semibold">Tree</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your binary genealogy with left/right legs. Tap + on an open slot to register a new member there.
-        </p>
-      </div>
+    <PageShell width="6xl" className="space-y-8">
+      <PageHero
+        title="Tree"
+        description="Your binary genealogy with left/right legs. Tap + on an open slot to register a new member there."
+      />
       <Card>
         <CardHeader>
           <CardTitle>Pairing diagram</CardTitle>
@@ -64,6 +63,6 @@ function Inner() {
         </CardContent>
       </Card>
       <PinControls joiningAmount={joiningAmount} onChanged={load} />
-    </div>
+    </PageShell>
   );
 }

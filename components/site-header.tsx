@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 const publicLinks = [
   { href: "/", label: "Home" },
@@ -59,44 +60,71 @@ export function SiteHeader() {
     : publicLinks;
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
-      <div className="mx-auto grid h-[4.75rem] w-full max-w-5xl grid-cols-[auto_1fr_auto] items-center gap-2 px-3 sm:h-24 sm:gap-4 sm:px-4">
-        <Link href="/" className="shrink-0">
+    <header className="glass-header sticky top-0 z-40">
+      <div className="mx-auto flex h-[4.75rem] w-full max-w-6xl items-center justify-between gap-3 px-4 sm:h-[5.25rem] sm:px-6">
+        <Link href="/" className="flex shrink-0 items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.jpg"
             alt="Rich Health Care Ayurveda"
-            className="size-14 rounded-full object-cover sm:size-[4.5rem]"
+            className="size-12 rounded-full object-cover ring-2 ring-primary/20 sm:size-14"
           />
-        </Link>
-        <Link href="/" className="min-w-0 text-center">
-          <span className="font-heading block text-sm font-semibold leading-tight sm:text-xl md:text-2xl">
+          <span className="font-heading hidden text-base font-semibold leading-tight text-foreground sm:block sm:text-lg">
             Rich Health Care Ayurveda
           </span>
         </Link>
-        <div className="flex items-center justify-end gap-1">
-          <nav className="mr-1 hidden items-center gap-4 text-sm lg:flex">
-            {memberLinks.slice(0, publicLinks.length).map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={
-                  pathname === link.href
-                    ? "font-medium text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }
-              >
-                {link.label}
+
+        <nav className="hidden items-center gap-1 lg:flex">
+          {memberLinks.slice(0, publicLinks.length).map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={pathname === link.href ? "nav-link-active" : "nav-link"}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2">
+          {!member ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link href="/login" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Login
               </Link>
-            ))}
-          </nav>
+              <Link href={isApp ? "/login" : "/register"} className={buttonVariants({ size: "sm" })}>
+                Register
+              </Link>
+            </div>
+          ) : (
+            <Link
+              href="/dashboard"
+              className={cn(
+                "hidden rounded-full px-3 py-1.5 text-sm font-medium sm:inline-flex",
+                pathname.startsWith("/dashboard") ? "nav-link-active" : "nav-link",
+              )}
+            >
+              Dashboard
+            </Link>
+          )}
+
           <Sheet>
-            <SheetTrigger render={<Button variant="ghost" size="icon" className="size-11" />}>
-              <Menu className="size-6" />
+            <SheetTrigger render={<Button variant="ghost" size="icon" className="size-10" />}>
+              <Menu className="size-5" />
             </SheetTrigger>
-            <SheetContent className="flex flex-col gap-4 p-6">
+            <SheetContent className="flex flex-col gap-1 p-6">
+              <p className="section-eyebrow mb-4">Menu</p>
               {memberLinks.map((link) => (
-                <Link key={link.href} href={link.href} className="text-lg">
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={cn(
+                    "rounded-lg px-3 py-2.5 text-base transition-colors",
+                    pathname === link.href
+                      ? "bg-primary/10 font-medium text-primary"
+                      : "text-foreground hover:bg-muted",
+                  )}
+                >
                   {link.label}
                   {link.href === "/kyc" && member ? (
                     <Badge
@@ -110,7 +138,7 @@ export function SiteHeader() {
               ))}
               {member && member.role !== "ADMIN" ? (
                 <DropdownMenu>
-                  <DropdownMenuTrigger className="inline-flex items-center gap-1 text-lg">
+                  <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-lg px-3 py-2.5 text-base hover:bg-muted">
                     PIN <ChevronDown className="size-3.5" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
@@ -122,25 +150,27 @@ export function SiteHeader() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}
-              {member ? (
-                <Button
-                  onClick={() => {
-                    logout();
-                    router.push("/");
-                  }}
-                >
-                  Sign out
-                </Button>
-              ) : (
-                <>
-                  <Link href="/login" className={buttonVariants({ variant: "outline" })}>
-                    Login
-                  </Link>
-                  <Link href={isApp ? "/login" : "/register"} className={buttonVariants()}>
-                    {isApp ? "Login" : "Register"}
-                  </Link>
-                </>
-              )}
+              <div className="mt-auto flex flex-col gap-2 pt-6">
+                {member ? (
+                  <Button
+                    onClick={() => {
+                      logout();
+                      router.push("/");
+                    }}
+                  >
+                    Sign out
+                  </Button>
+                ) : (
+                  <>
+                    <Link href="/login" className={buttonVariants({ variant: "outline" })}>
+                      Login
+                    </Link>
+                    <Link href={isApp ? "/login" : "/register"} className={buttonVariants()}>
+                      Register
+                    </Link>
+                  </>
+                )}
+              </div>
             </SheetContent>
           </Sheet>
         </div>

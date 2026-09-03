@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { inr } from "@/lib/money";
+import { PageHero, PageShell } from "@/components/page-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -31,36 +32,39 @@ export default async function ProductsPage() {
   const { products, error } = await loadProducts();
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16">
-      <div className="mb-10 max-w-2xl">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">Catalog</p>
-        <h1 className="font-heading mt-2 text-4xl font-semibold">Ayurvedic range at distributor price</h1>
-        <p className="mt-3 text-muted-foreground">
-          Photos and pack details are from Rich Health Care Solution. Retail income is credited only after an
-          admin approves the order payment.
-        </p>
-      </div>
+    <PageShell width="6xl">
+      <PageHero
+        eyebrow="Catalog"
+        title="Ayurvedic range at distributor price"
+        description="Photos and pack details from Rich Health Care Solution. Retail income is credited only after an admin approves the order payment."
+      />
       {error ? <p className="text-destructive">{error}</p> : null}
       {products.length === 0 && !error ? (
         <p className="text-muted-foreground">No products are listed yet.</p>
       ) : null}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {products.map((product) => (
-          <Card key={product.id}>
+          <Card key={product.id} className="transition-transform hover:-translate-y-0.5 hover:shadow-lg">
             {product.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.imageUrl} alt="" className="h-52 w-full rounded-t-xl bg-white object-contain p-2" />
+              <img
+                src={product.imageUrl}
+                alt=""
+                className="h-52 w-full bg-gradient-to-b from-white to-muted/30 object-contain p-3"
+              />
             ) : null}
             <CardHeader>
-              <CardTitle className="text-lg">{product.name}</CardTitle>
+              <CardTitle className="text-base leading-snug">{product.name}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {product.description ? (
-                <p className="text-sm text-muted-foreground">{product.description}</p>
+                <p className="line-clamp-2 text-sm text-muted-foreground">{product.description}</p>
               ) : null}
-              <p className="text-sm text-muted-foreground line-through">{inr(product.mrp)} MRP</p>
-              <p className="text-2xl font-semibold">{inr(product.dp)} DP</p>
-              <p className="text-sm text-muted-foreground">{product.stock} in stock</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-xl font-semibold text-primary">{inr(product.dp)}</p>
+                <p className="text-sm text-muted-foreground line-through">{inr(product.mrp)} MRP</p>
+              </div>
+              <p className="text-xs text-muted-foreground">{product.stock} in stock</p>
               <Link href="/register" className={buttonVariants({ className: "w-full" })}>
                 Join to order
               </Link>
@@ -68,6 +72,6 @@ export default async function ProductsPage() {
           </Card>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }
