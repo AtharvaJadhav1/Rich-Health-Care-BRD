@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
@@ -14,8 +14,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type Position = "LEFT" | "RIGHT";
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<p className="px-4 py-16 text-center text-muted-foreground">Loading…</p>}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const { register } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [memberCode, setMemberCode] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -41,6 +50,19 @@ export default function RegisterPage() {
       })
       .catch(() => {});
   }, [router]);
+
+  useEffect(() => {
+    const sponsor = searchParams.get("sponsor")?.trim().toUpperCase();
+    const placement = searchParams.get("placement")?.trim().toUpperCase();
+    const position = searchParams.get("position")?.trim().toUpperCase();
+    if (!sponsor && !placement && position !== "LEFT" && position !== "RIGHT") return;
+    setForm((current) => ({
+      ...current,
+      ...(sponsor ? { sponsorCode: sponsor } : {}),
+      ...(placement ? { placementCode: placement } : {}),
+      ...(position === "LEFT" || position === "RIGHT" ? { position } : {}),
+    }));
+  }, [searchParams]);
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm({ ...form, [key]: value });
@@ -109,7 +131,8 @@ export default function RegisterPage() {
       <div className="mb-6">
         <h1 className="font-heading text-3xl font-semibold">Registration</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Fill every field. Placement side must be empty under the placement ID you enter.
+          Fill every field. Placement side must be empty under the placement ID you enter. Open slots on your
+          tree diagram pre-fill sponsor, placement, and left/right position.
         </p>
       </div>
       <Card>

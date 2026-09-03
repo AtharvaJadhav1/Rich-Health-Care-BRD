@@ -52,7 +52,7 @@ function Inner() {
       <div>
         <h1 className="font-heading text-3xl font-semibold">Tree</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Binary pairing plus PIN generate / transfer / used / unused on the same page.
+          Your binary genealogy with left/right legs. Tap + on an open slot to register a new member there.
         </p>
       </div>
       <Card>

@@ -340,7 +340,7 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get("/member/tree", async (request, reply) => {
     const member = await requireAuth(request, reply);
     if (!member) return;
-    const tree = await fetchSubtree(member.id, 3);
+    const tree = await fetchSubtree(member.id, 4);
     const today = utcDateKey();
     const volume = await prisma.binaryVolume.findUnique({
       where: { memberId_date: { memberId: member.id, date: today } },
