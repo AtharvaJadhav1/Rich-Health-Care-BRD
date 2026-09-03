@@ -5,9 +5,9 @@ import { prisma } from "./db";
 import { requireAuth, requireRole, signToken } from "./auth";
 import { utcDateKey } from "./dates";
 import { computeMatching } from "./matching";
-import { activateMember, fetchSubtree, getOrCreateVolume, nextMemberCode, placeUnderSponsor } from "./tree";
+import { activateMember, fetchSubtree, getOrCreateVolume, nextMemberCode, placeAtPosition } from "./tree";
 import { creditWallet } from "./wallet";
-import { generatePassword, isValidPan, normalizePan } from "./credentials";
+import { isValidPan, normalizePan } from "./credentials";
 import { consumePinForJoining, issuePin, publicPin } from "./pins";
 import { bootstrapCompany, ensurePlanAndCatalog, publicStatus } from "./bootstrap";
 import {
@@ -16,13 +16,29 @@ import {
   memberTeamSummary,
 } from "./weekly";
 
-const registerSchema = z.object({
-  name: z.string().min(2),
-  phone: z.string().regex(/^[0-9]{10}$/, "Enter a 10-digit phone number."),
-  panNumber: z.string().min(10),
-  pinCode: z.string().optional(),
-  sponsorCode: z.string().optional(),
-});
+const registerSchema = z
+  .object({
+    name: z.string().min(2),
+    phone: z.string().regex(/^[0-9]{10}$/, "Enter a 10-digit mobile number."),
+    panNumber: z.string().min(10),
+    password: z.string().min(8, "Password must be at least 8 characters."),
+    sponsorCode: z.string().min(3),
+    placementCode: z.string().min(3),
+    position: z.enum(["LEFT", "RIGHT"]),
+    dateOfBirth: z.string().min(1),
+    at: z.string().min(2),
+    city: z.string().min(2),
+    state: z.string().min(2),
+    agreeTerms: z.literal(true, { message: "You must agree to the terms and privacy policy." }),
+    pinCode: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      const dob = new Date(data.dateOfBirth);
+      return !Number.isNaN(dob.getTime()) && dob < new Date();
+    },
+    { message: "Enter a valid date of birth.", path: ["dateOfBirth"] },
+  );
 
 const loginSchema = z.object({
   memberCode: z.string().min(3).optional(),
@@ -139,7 +155,7 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get("/products", async () => {
     return prisma.product.findMany({
       where: { active: true },
-      orderBy: { name: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
   });
 
@@ -148,7 +164,19 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input." });
     }
-    const { name, phone, pinCode, sponsorCode } = parsed.data;
+    const {
+      name,
+      phone,
+      pinCode,
+      sponsorCode,
+      placementCode,
+      position,
+      password,
+      dateOfBirth,
+      at,
+      city,
+      state,
+    } = parsed.data;
     if ((await prisma.member.count()) === 0) {
       return reply.code(409).send({ error: "Platform is not set up yet. Open /setup first." });
     }
@@ -158,35 +186,46 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     const existing = await prisma.member.findUnique({ where: { phone } });
     if (existing) {
-      return reply.code(409).send({ error: "This phone number is already registered." });
+      return reply.code(409).send({ error: "This mobile number is already registered." });
     }
     const panTaken = await prisma.member.findFirst({ where: { panNumber } });
     if (panTaken) {
       return reply.code(409).send({ error: "This PAN is already registered." });
     }
-    const sponsor = sponsorCode?.trim()
-      ? await prisma.member.findUnique({ where: { memberCode: sponsorCode.trim().toUpperCase() } })
-      : await prisma.member.findFirst({
-          where: { role: "MEMBER", status: "ACTIVE" },
-          orderBy: { createdAt: "asc" },
-        });
+    const sponsor = await prisma.member.findUnique({
+      where: { memberCode: sponsorCode.trim().toUpperCase() },
+    });
     if (!sponsor || sponsor.status !== "ACTIVE" || sponsor.role !== "MEMBER") {
-      return reply.code(400).send({ error: "Sponsor must be an active distributor. Use their Member ID or a valid PIN." });
+      return reply.code(400).send({ error: "Sponsor ID must be an active distributor Member ID." });
     }
-    const placement = await placeUnderSponsor(sponsor.id);
-    const plainPassword = generatePassword();
+    const placement = await prisma.member.findUnique({
+      where: { memberCode: placementCode.trim().toUpperCase() },
+    });
+    if (!placement || placement.role !== "MEMBER") {
+      return reply.code(400).send({ error: "Placement ID must be a valid distributor Member ID." });
+    }
+    let treePlacement;
+    try {
+      treePlacement = await placeAtPosition(placement.id, position);
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : "Invalid placement." });
+    }
     const member = await prisma.member.create({
       data: {
         name: name.trim(),
         phone,
         panNumber,
         kycStatus: "PENDING",
-        password: await bcrypt.hash(plainPassword, 12),
-        issuedPassword: plainPassword,
+        password: await bcrypt.hash(password, 12),
         memberCode: await nextMemberCode(),
         sponsorId: sponsor.id,
-        parentId: placement.parentId,
-        position: placement.position,
+        parentId: treePlacement.parentId,
+        position: treePlacement.position,
+        address: at.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        dateOfBirth: new Date(dateOfBirth),
         role: "MEMBER",
         status: "PENDING_PAYMENT",
         rank: "Distributor",
@@ -214,7 +253,7 @@ export async function registerRoutes(app: FastifyInstance) {
     return {
       token,
       member: publicMember(fresh, { includePan: true }),
-      credentials: { memberCode: fresh.memberCode, password: plainPassword },
+      credentials: { memberCode: fresh.memberCode, password },
     };
   });
 
@@ -1282,7 +1321,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.get("/admin/products", async (request, reply) => {
     if (!(await requireRole(request, reply, "ADMIN"))) return;
-    return prisma.product.findMany({ orderBy: { name: "asc" } });
+    return prisma.product.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
   });
 
   app.post("/admin/products", async (request, reply) => {

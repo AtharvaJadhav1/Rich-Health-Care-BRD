@@ -35,9 +35,17 @@ type AuthState = {
   register: (input: {
     name: string;
     phone: string;
-    panNumber?: string;
+    panNumber: string;
+    password: string;
+    sponsorCode: string;
+    placementCode: string;
+    position: "LEFT" | "RIGHT";
+    dateOfBirth: string;
+    at: string;
+    city: string;
+    state: string;
+    agreeTerms: true;
     pinCode?: string;
-    sponsorCode?: string;
   }) => Promise<{ member: Member; credentials: IssuedCredentials }>;
   logout: () => void;
   refresh: () => Promise<void>;

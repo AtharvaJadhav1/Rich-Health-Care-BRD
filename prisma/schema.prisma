@@ -17,6 +17,9 @@ model Member {
   kycStatus      String             @default("PENDING")
   photoUrl       String?
   address        String?
+  city           String?
+  state          String?
+  dateOfBirth    DateTime?
   issuedPassword String?
   sponsorId      String?
   sponsor        Member?            @relation("Sponsor", fields: [sponsorId], references: [id])
@@ -150,6 +153,7 @@ model Product {
   mrp         Int
   stock       Int     @default(0)
   active      Boolean @default(true)
+  sortOrder   Int     @default(0)
   imageUrl    String?
   orders      Order[]
 }

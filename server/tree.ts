@@ -3,6 +3,25 @@ import { prisma } from "./db";
 import { utcDateKey } from "./dates";
 import { leftoverFromSnapshot } from "./matching";
 
+export async function placeAtPosition(parentId: string, position: "LEFT" | "RIGHT") {
+  const parent = await prisma.member.findUnique({ where: { id: parentId } });
+  if (!parent || parent.role !== "MEMBER") {
+    throw Object.assign(new Error("Placement ID must be an active distributor in the tree."), {
+      statusCode: 400,
+    });
+  }
+  const taken = await prisma.member.findFirst({
+    where: { parentId, position },
+  });
+  if (taken) {
+    throw Object.assign(
+      new Error(`The ${position === "LEFT" ? "left" : "right"} side under this placement ID is already filled.`),
+      { statusCode: 400 },
+    );
+  }
+  return { parentId, position };
+}
+
 export async function placeUnderSponsor(sponsorId: string) {
   const queue = [sponsorId];
   while (queue.length > 0) {

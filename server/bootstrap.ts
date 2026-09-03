@@ -2,120 +2,10 @@ import bcrypt from "bcrypt";
 import { prisma } from "./db";
 import { issuePassword } from "./auth";
 import { isValidPan, normalizePan } from "./credentials";
+import { PRODUCT_CATALOG, RETIRED_PRODUCT_NAMES } from "../lib/catalog";
 
-const DEMO_PRODUCT_NAMES = [
-  "Daily Wellness Pack",
-  "Immunity Drops 30ml",
-  "Joint Care Capsules",
-  "Green Spirulina Tablets",
-];
-
-const DEFAULT_PRODUCTS = [
-  {
-    name: "Super Lady Care Juice",
-    description: "500 ml Ayurvedic women's wellness juice for daily vitality and hormonal support.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/super-lady-care-juice.jpg",
-  },
-  {
-    name: "Rich Health Amrit Juice Ai1",
-    description: "500 ml herbal concentrate blended as a daily immunity and wellness tonic.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/amrit-juice.jpg",
-  },
-  {
-    name: "Orthonill Powder",
-    description: "150 g Ayurvedic powder for joint comfort. Take as directed on the pack.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/orthonill-powder.jpg",
-  },
-  {
-    name: "Orthonill Vati",
-    description: "30 tablets for joint and muscle comfort. One tablet morning and evening with lukewarm water.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/orthonill-vati.jpg",
-  },
-  {
-    name: "Diaba Nill Powder",
-    description: "150 g Ayurvedic powder formulated as a daily wellness support for sugar management.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/diaba-nill-powder.jpg",
-  },
-  {
-    name: "Petshudhhi Powder",
-    description: "70 g digestive cleansing powder. Take with lukewarm water as directed.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/petshudhhi-powder.jpg",
-  },
-  {
-    name: "Hair Growth Oil",
-    description: "Ayurvedic hair oil with Amla and Bhringraj to nourish the scalp and reduce hair fall.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/hair-growth-oil.jpg",
-  },
-  {
-    name: "Natural Herbs Hair Treatment Oil",
-    description: "Herbal hair treatment oil to strengthen roots and nourish the scalp.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/hair-and-body-oils.jpg",
-  },
-  {
-    name: "Ayurvedic Body Pain & Massage Oil",
-    description: "Massage oil for joint and muscle comfort and daily relaxation.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/hair-and-body-oils.jpg",
-  },
-  {
-    name: "Anti Hair Fall Shampoo",
-    description: "Ayurvedic shampoo to strengthen roots, reduce hair fall, and keep the scalp clean.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/anti-hair-fall-shampoo.jpg",
-  },
-  {
-    name: "Skin Care Soap",
-    description: "75 g neem and papaya soap for daily cleansing. MRP ₹175.",
-    dp: 125,
-    mrp: 175,
-    stock: 50,
-    imageUrl: "/products/skin-care-soap.jpg",
-  },
-  {
-    name: "Glow Herb Soap",
-    description: "75 g herbal soap for a natural glow. MRP ₹199.",
-    dp: 140,
-    mrp: 199,
-    stock: 50,
-    imageUrl: "/products/glow-herb-soap.jpg",
-  },
-  {
-    name: "Rich Fly Sanitary Pads",
-    description: "11 pcs, 290 mm cotton pads with anion chip. Chemical-free personal care.",
-    dp: 999,
-    mrp: 1499,
-    stock: 50,
-    imageUrl: "/products/rich-fly-pads.jpg",
-  },
-];
+const DEMO_PRODUCT_NAMES = RETIRED_PRODUCT_NAMES;
+const DEFAULT_PRODUCTS = PRODUCT_CATALOG;
 
 export async function ensurePlanAndCatalog() {
   await prisma.planConfig.upsert({
@@ -162,6 +52,11 @@ export async function ensurePlanAndCatalog() {
       await prisma.product.create({ data: { ...product, active: true } });
     }
   }
+  const liveNames = DEFAULT_PRODUCTS.map((p) => p.name);
+  await prisma.product.updateMany({
+    where: { name: { notIn: liveNames }, active: true },
+    data: { active: false },
+  });
 }
 
 export async function publicStatus() {
