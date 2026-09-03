@@ -17,6 +17,7 @@ import {
 const publicLinks = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
+  { href: "/business", label: "Business" },
   { href: "/products", label: "Products" },
   { href: "/contact", label: "Contact" },
 ];
@@ -75,7 +76,7 @@ export function SiteHeader() {
         </Link>
         <div className="flex items-center justify-end gap-1">
           <nav className="mr-1 hidden items-center gap-4 text-sm lg:flex">
-            {memberLinks.slice(0, 4).map((link) => (
+            {memberLinks.slice(0, publicLinks.length).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
