@@ -24,6 +24,14 @@ type KycPayload = {
   }[];
 };
 
+type BankForm = {
+  accountName: string;
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  upiId: string;
+};
+
 export default function KycPage() {
   return (
     <RequireAuth>
@@ -37,26 +45,60 @@ function Inner() {
   const [data, setData] = useState<KycPayload | null>(null);
   const [panNumber, setPanNumber] = useState("");
   const [panImageUrl, setPanImageUrl] = useState("");
+  const [bankForm, setBankForm] = useState<BankForm>({
+    accountName: "",
+    bankName: "",
+    accountNumber: "",
+    ifsc: "",
+    upiId: "",
+  });
+  const [savingBank, setSavingBank] = useState(false);
 
   async function load() {
     const payload = await api<KycPayload>("/member/kyc");
     setData(payload);
     setPanNumber(payload.panNumber);
+    await refresh();
   }
 
   useEffect(() => {
     load().catch((err) => toast.error(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function submit(e: FormEvent) {
+  useEffect(() => {
+    if (!member) return;
+    setBankForm({
+      accountName: member.accountName ?? "",
+      bankName: member.bankName ?? "",
+      accountNumber: member.accountNumber ?? "",
+      ifsc: member.ifsc ?? "",
+      upiId: member.upiId ?? "",
+    });
+  }, [member]);
+
+  async function submitKyc(e: FormEvent) {
     e.preventDefault();
     try {
       await api("/kyc/submit", { method: "POST", body: { panNumber, panImageUrl } });
       toast.success("KYC submitted for admin review");
       await load();
-      await refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not submit KYC");
+    }
+  }
+
+  async function saveBank(e: FormEvent) {
+    e.preventDefault();
+    setSavingBank(true);
+    try {
+      await api("/member/bank", { method: "PATCH", body: bankForm });
+      toast.success("Bank details saved");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save bank details");
+    } finally {
+      setSavingBank(false);
     }
   }
 
@@ -70,25 +112,67 @@ function Inner() {
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-semibold">KYC</h1>
+          <h1 className="font-heading text-3xl font-semibold">KYC &amp; bank</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            PAN format is checked at submit. Admin reviews the document. Status is informational in
-            this phase and does not block PIN, orders, or matching.
+            Submit PAN for verification and save your payout bank account for weekly transfers.
           </p>
         </div>
-        <Badge variant={data.kycStatus === "VERIFIED" ? "default" : "secondary"}>
-          {data.kycStatus}
-        </Badge>
+        <Badge variant={data.kycStatus === "VERIFIED" ? "default" : "secondary"}>{data.kycStatus}</Badge>
       </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Submit documents</CardTitle>
+          <CardTitle>Bank details for payouts</CardTitle>
         </CardHeader>
         <CardContent>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Weekly approved income is transferred to this account. Double-check account holder name, IFSC, and
+            account number.
+          </p>
+          <form className="grid max-w-xl gap-3" onSubmit={saveBank}>
+            {(
+              [
+                ["accountName", "Account holder name"],
+                ["bankName", "Bank name"],
+                ["accountNumber", "Account number"],
+                ["ifsc", "IFSC"],
+                ["upiId", "UPI ID (optional)"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-2">
+                <Label>{label}</Label>
+                <Input
+                  value={bankForm[key]}
+                  onChange={(e) =>
+                    setBankForm({
+                      ...bankForm,
+                      [key]: key === "ifsc" ? e.target.value.toUpperCase() : e.target.value,
+                    })
+                  }
+                  required={key !== "upiId"}
+                />
+              </div>
+            ))}
+            <Button type="submit" disabled={savingBank}>
+              {savingBank ? "Saving…" : "Save bank details"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>PAN KYC</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-muted-foreground">
+            PAN format is checked at submit. Admin reviews the document. Status is informational in this phase
+            and does not block PIN, orders, or matching.
+          </p>
           {pending ? (
             <p className="text-sm">A submission is already waiting for admin review.</p>
           ) : (
-            <form className="space-y-4" onSubmit={submit}>
+            <form className="space-y-4" onSubmit={submitKyc}>
               <div className="space-y-2">
                 <Label htmlFor="pan">PAN number</Label>
                 <Input
@@ -113,9 +197,10 @@ function Inner() {
           )}
         </CardContent>
       </Card>
+
       <Card>
         <CardHeader>
-          <CardTitle>History</CardTitle>
+          <CardTitle>KYC history</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {data.submissions.length === 0 ? (
@@ -125,9 +210,7 @@ function Inner() {
               <div key={row.id} className="rounded-lg border p-3 text-sm">
                 <div className="flex justify-between">
                   <span className="font-mono">{row.panNumber}</span>
-                  <Badge variant={row.status === "VERIFIED" ? "default" : "secondary"}>
-                    {row.status}
-                  </Badge>
+                  <Badge variant={row.status === "VERIFIED" ? "default" : "secondary"}>{row.status}</Badge>
                 </div>
                 <p className="text-muted-foreground">{formatDate(row.createdAt)}</p>
                 {row.adminNote ? <p>Admin: {row.adminNote}</p> : null}

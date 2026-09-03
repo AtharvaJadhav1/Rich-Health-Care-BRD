@@ -53,6 +53,23 @@ export async function api<T>(
   return data as T;
 }
 
+export async function uploadPhoto(file: File): Promise<string> {
+  const token = getToken();
+  const form = new FormData();
+  form.append("photo", file);
+  const res = await fetch("/api/member/photo", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    throw new Error(data?.error ?? "Photo upload failed.");
+  }
+  return data.photoUrl as string;
+}
+
 export async function downloadCsv(path: string, filename: string) {
   const token = getToken();
   const res = await fetch(`/api${path}`, {

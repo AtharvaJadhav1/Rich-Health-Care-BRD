@@ -15,6 +15,8 @@ export type Member = {
   panNumber?: string;
   photoUrl: string | null;
   address: string | null;
+  city?: string | null;
+  state?: string | null;
   position: string | null;
   activatedAt: string | null;
   createdAt: string;

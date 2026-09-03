@@ -59,6 +59,8 @@ function publicMember(
     panNumber: string;
     photoUrl: string | null;
     address: string | null;
+    city: string | null;
+    state: string | null;
     sponsorId: string | null;
     parentId: string | null;
     position: string | null;
@@ -83,6 +85,8 @@ function publicMember(
     kycStatus: member.kycStatus,
     photoUrl: member.photoUrl,
     address: member.address,
+    city: member.city ?? null,
+    state: member.state ?? null,
     panNumber: opts.includePan ? member.panNumber : undefined,
     sponsorId: member.sponsorId,
     parentId: member.parentId,
@@ -321,6 +325,8 @@ export async function registerRoutes(app: FastifyInstance) {
     const body = z
       .object({
         address: z.string().max(200).optional(),
+        city: z.string().max(100).optional(),
+        state: z.string().max(100).optional(),
         photoUrl: z.string().max(500).optional(),
       })
       .safeParse(request.body);
@@ -331,6 +337,8 @@ export async function registerRoutes(app: FastifyInstance) {
       where: { id: member.id },
       data: {
         ...(body.data.address !== undefined ? { address: body.data.address.trim() || null } : {}),
+        ...(body.data.city !== undefined ? { city: body.data.city.trim() || null } : {}),
+        ...(body.data.state !== undefined ? { state: body.data.state.trim() || null } : {}),
         ...(body.data.photoUrl !== undefined ? { photoUrl: body.data.photoUrl || null } : {}),
       },
     });
