@@ -43,7 +43,7 @@ export default function LoginPage() {
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 px-4 py-16">
       <div>
-        <h1 className="font-heading text-3xl font-semibold">Sign in</h1>
+        <h1 className="font-heading text-3xl font-semibold">Login</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Use the Member ID and password issued at registration. Passwords are case-sensitive.
         </p>
@@ -76,7 +76,7 @@ export default function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? "Logging in…" : "Login"}
             </Button>
           </form>
         </CardContent>
@@ -84,7 +84,7 @@ export default function LoginPage() {
       <p className="text-sm text-muted-foreground">
         New distributor?{" "}
         <Link href="/register" className="text-primary">
-          Register with PAN
+          Register
         </Link>
       </p>
     </div>

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { ProductSlideshow } from "@/components/product-slideshow";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
@@ -21,6 +23,14 @@ export default function HomePage() {
           <h1 className="font-heading text-2xl font-semibold sm:text-4xl">
             Welcome to Rich Health Care Ayurveda
           </h1>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <Link href="/login" className={buttonVariants({ size: "lg" })}>
+              Login
+            </Link>
+            <Link href="/register" className={buttonVariants({ size: "lg", variant: "outline" })}>
+              Register
+            </Link>
+          </div>
         </div>
 
         <div className="space-y-3">

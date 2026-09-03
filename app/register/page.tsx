@@ -131,7 +131,7 @@ export default function RegisterPage() {
       <p className="text-sm text-muted-foreground">
         Already registered?{" "}
         <Link href="/login" className="text-primary">
-          Sign in with Member ID
+          Login
         </Link>
       </p>
     </div>

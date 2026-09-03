@@ -133,10 +133,10 @@ export function SiteHeader() {
               ) : (
                 <>
                   <Link href="/login" className={buttonVariants({ variant: "outline" })}>
-                    Sign in
+                    Login
                   </Link>
                   <Link href={isApp ? "/login" : "/register"} className={buttonVariants()}>
-                    {isApp ? "Sign in" : "Join"}
+                    {isApp ? "Login" : "Register"}
                   </Link>
                 </>
               )}
