@@ -19,7 +19,7 @@ export default function SetupPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<SetupResult | null>(null);
   const [form, setForm] = useState({
-      companyName: "Rich Health Care Solution",
+    companyName: "Rich Health Care Solution",
     adminName: "",
     adminPhone: "",
     adminPassword: "",
@@ -27,13 +27,6 @@ export default function SetupPage() {
     rootName: "",
     rootPhone: "",
     rootPan: "",
-    accountName: "",
-    bankName: "",
-    accountNumber: "",
-    ifsc: "",
-    upiId: "",
-    contactEmail: "",
-    contactPhone: "",
   });
 
   useEffect(() => {
@@ -92,8 +85,8 @@ export default function SetupPage() {
               Password <span className="font-mono font-medium">{result.root.password}</span>
             </p>
             <p className="text-muted-foreground">
-              New members join under this ID until they have their own. Transfer joining fees to the company
-              bank you entered; admin approves UTRs; weekly payouts go to each member&apos;s bank details.
+              New members join under this ID until they have their own. Admin can add company bank details later
+              from Plan config and approve UTR payments from the dashboard.
             </p>
           </CardContent>
         </Card>
@@ -138,25 +131,6 @@ export default function SetupPage() {
               onChange={(v) => set("rootPhone", v)}
             />
             <Field label="First distributor PAN" value={form.rootPan} onChange={(v) => set("rootPan", v.toUpperCase())} />
-            <p className="pt-2 text-sm font-medium">Company bank (members pay joining ₹ here)</p>
-            <Field label="Account holder name" value={form.accountName} onChange={(v) => set("accountName", v)} />
-            <Field label="Bank name" value={form.bankName} onChange={(v) => set("bankName", v)} />
-            <Field label="Account number" value={form.accountNumber} onChange={(v) => set("accountNumber", v)} />
-            <Field label="IFSC" value={form.ifsc} onChange={(v) => set("ifsc", v)} />
-            <Field label="UPI ID (optional)" value={form.upiId} onChange={(v) => set("upiId", v)} required={false} />
-            <p className="pt-2 text-sm font-medium">Public contact (shown on the website)</p>
-            <Field
-              label="Contact email (optional)"
-              value={form.contactEmail}
-              onChange={(v) => set("contactEmail", v)}
-              required={false}
-            />
-            <Field
-              label="Contact phone (optional)"
-              value={form.contactPhone}
-              onChange={(v) => set("contactPhone", v)}
-              required={false}
-            />
             <Button type="submit" className="w-full" disabled={busy}>
               {busy ? "Creating…" : "Create live platform"}
             </Button>
