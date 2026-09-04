@@ -7,7 +7,14 @@ import { requireAdmin, requireStaff } from "./staff";
 import { isActiveMemberStatus } from "./member-status";
 import { utcDateKey } from "./dates";
 import { computeMatching } from "./matching";
-import { activateMember, fetchMemberTreeView, getOrCreateVolume, nextMemberCode, reserveTreeSlot } from "./tree";
+import {
+  activateMember,
+  fetchMemberTreeView,
+  getOrCreateVolume,
+  isDescendantOf,
+  nextMemberCode,
+  reserveTreeSlot,
+} from "./tree";
 import { creditWallet } from "./wallet";
 import { isValidPan, normalizePan } from "./credentials";
 import {
@@ -393,18 +400,39 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get("/member/tree", async (request, reply) => {
     const member = await requireAuth(request, reply);
     if (!member) return;
-    const { tree, viewerId } = await fetchMemberTreeView(member.id, 5);
+    const query = request.query as { focus?: string };
+    let focusId = member.id;
+    if (query.focus?.trim()) {
+      const target = await prisma.member.findFirst({
+        where: {
+          OR: [{ id: query.focus.trim() }, { memberCode: query.focus.trim().toUpperCase() }],
+        },
+        select: { id: true },
+      });
+      if (!target) {
+        return reply.code(404).send({ error: "Member not found in the tree." });
+      }
+      if (member.role !== "ADMIN" && !(await isDescendantOf(target.id, member.id))) {
+        return reply.code(403).send({ error: "You can only view your own downline." });
+      }
+      focusId = target.id;
+    }
+    const { tree, viewerId, focusId: rootId } = await fetchMemberTreeView(member.id, 5, focusId);
+    if (!tree) {
+      return reply.code(404).send({ error: "Tree not found for this member." });
+    }
     const today = utcDateKey();
     const volume = await prisma.binaryVolume.findUnique({
-      where: { memberId_date: { memberId: member.id, date: today } },
+      where: { memberId_date: { memberId: rootId, date: today } },
     });
     const previous = await prisma.binaryVolume.findFirst({
-      where: { memberId: member.id, date: { lt: today } },
+      where: { memberId: rootId, date: { lt: today } },
       orderBy: { date: "desc" },
     });
     return {
       tree,
       viewerId,
+      focusId: rootId,
       today,
       volume: volume ?? {
         leftCount: 0,

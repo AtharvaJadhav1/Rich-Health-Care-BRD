@@ -65,6 +65,7 @@ function Inner() {
   const [tree, setTree] = useState<{
     tree: TreeNode;
     viewerId?: string;
+    focusId?: string;
     volume: {
       leftCount: number;
       rightCount: number;
@@ -79,15 +80,22 @@ function Inner() {
   const [state, setState] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  async function loadTree(focusId?: string) {
+    const path = focusId ? `/member/tree?focus=${encodeURIComponent(focusId)}` : "/member/tree";
+    const t = await api<{
+      tree: TreeNode;
+      viewerId?: string;
+      focusId?: string;
+      volume: never;
+    }>(path);
+    setTree(t as never);
+  }
+
   async function load() {
-    const [profile, w, t] = await Promise.all([
-      api<Me>("/member/me"),
-      api<Wallet>("/member/wallet"),
-      api<{ tree: TreeNode; volume: never }>("/member/tree"),
-    ]);
+    const [profile, w] = await Promise.all([api<Me>("/member/me"), api<Wallet>("/member/wallet")]);
     setMe(profile);
     setWallet(w);
-    setTree(t as never);
+    await loadTree();
     setAddress(profile.member.address ?? "");
     setCity(profile.member.city ?? "");
     setState(profile.member.state ?? "");
@@ -250,7 +258,14 @@ function Inner() {
               <CardTitle>Genealogy</CardTitle>
             </CardHeader>
             <CardContent>
-              <PairingDiagram tree={tree.tree} volume={tree.volume} viewerId={tree.viewerId ?? member?.id} />
+              <PairingDiagram
+                tree={tree.tree}
+                volume={tree.volume}
+                viewerId={tree.viewerId ?? member?.id}
+                focusId={tree.focusId}
+                onFocusMember={(id) => loadTree(id).catch((err) => toast.error(err.message))}
+                onResetFocus={() => loadTree().catch((err) => toast.error(err.message))}
+              />
             </CardContent>
           </Card>
         </TabsContent>

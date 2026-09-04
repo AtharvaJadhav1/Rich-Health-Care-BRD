@@ -197,12 +197,30 @@ export async function fetchSubtree(rootId: string, depth = 3): Promise<TreeNode 
   return walk(rootId, depth);
 }
 
-/** Full genealogy from org root through the viewer and their downline. */
-export async function fetchMemberTreeView(memberId: string, depthBelow = 5) {
-  const rootId = await findTreeRoot(memberId);
-  const uplineDepth = await depthFromRoot(memberId);
-  const tree = await fetchSubtree(rootId, uplineDepth + depthBelow);
-  return { tree, rootId, viewerId: memberId, uplineDepth };
+export async function isDescendantOf(descendantId: string, ancestorId: string): Promise<boolean> {
+  if (descendantId === ancestorId) return true;
+  let currentId = descendantId;
+  for (let guard = 0; guard < 64; guard++) {
+    const row = await prisma.member.findUnique({
+      where: { id: currentId },
+      select: { parentId: true },
+    });
+    if (!row?.parentId) return false;
+    if (row.parentId === ancestorId) return true;
+    currentId = row.parentId;
+  }
+  return false;
+}
+
+/** Subtree rooted at focus member — selected member and downline only (no upline). */
+export async function fetchMemberTreeView(
+  memberId: string,
+  depthBelow = 5,
+  focusId?: string,
+) {
+  const rootId = focusId ?? memberId;
+  const tree = await fetchSubtree(rootId, depthBelow);
+  return { tree, rootId, viewerId: memberId, focusId: rootId };
 }
 
 export async function nextMemberCode() {

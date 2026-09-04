@@ -50,25 +50,28 @@ function MemberCard({
   isRoot,
   side,
   isViewer,
+  onFocus,
 }: {
   node: TreeNode;
   isRoot?: boolean;
   side?: "LEFT" | "RIGHT";
   isViewer?: boolean;
+  onFocus?: () => void;
 }) {
   const color = treeStatusColor(node.status);
-  return (
-    <div
-      className={cn(
-        "relative z-10 flex w-[148px] flex-col items-center rounded-xl border bg-card px-3 py-3 text-center shadow-sm transition-shadow hover:shadow-md",
-        isRoot && "border-primary ring-2 ring-primary/20",
-        isViewer && "ring-2 ring-primary/40",
-        side === "LEFT" && "border-l-4 border-l-sky-500/70",
-        side === "RIGHT" && "border-r-4 border-r-amber-500/70",
-        color === "green" && "border-emerald-500/40 bg-emerald-50/40",
-        color === "red" && "border-red-500/40 bg-red-50/40",
-      )}
-    >
+  const className = cn(
+    "relative z-10 flex w-[148px] flex-col items-center rounded-xl border bg-card px-3 py-3 text-center shadow-sm transition-shadow hover:shadow-md",
+    isRoot && "border-primary ring-2 ring-primary/20",
+    isViewer && "ring-2 ring-primary/40",
+    side === "LEFT" && "border-l-4 border-l-sky-500/70",
+    side === "RIGHT" && "border-r-4 border-r-amber-500/70",
+    color === "green" && "border-emerald-500/40 bg-emerald-50/40",
+    color === "red" && "border-red-500/40 bg-red-50/40",
+    onFocus && "cursor-pointer hover:ring-2 hover:ring-primary/30",
+  );
+
+  const content = (
+    <>
       {side ? (
         <span
           className={cn(
@@ -96,8 +99,21 @@ function MemberCard({
       <p className="mt-0.5 font-mono text-xs text-muted-foreground">{node.memberCode}</p>
       {node.rank ? <p className="mt-1 text-[10px] text-muted-foreground">{node.rank}</p> : null}
       {isViewer ? <p className="mt-1 text-[10px] font-medium text-primary">You</p> : null}
-    </div>
+      {onFocus ? (
+        <p className="mt-1 text-[10px] font-medium text-muted-foreground">View downline</p>
+      ) : null}
+    </>
   );
+
+  if (onFocus) {
+    return (
+      <button type="button" className={className} onClick={onFocus} title={`View ${node.memberCode} and downline only`}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 function EmptySlot({
@@ -179,14 +195,17 @@ function TreeBranch({
   sponsorCode,
   viewerId,
   side,
+  onFocusMember,
 }: {
   node: TreeNode;
   depth: number;
   sponsorCode: string;
   viewerId?: string;
   side?: "LEFT" | "RIGHT";
+  onFocusMember?: (memberId: string) => void;
 }) {
   const showChildren = depth < MAX_DEPTH;
+  const canFocus = Boolean(onFocusMember && depth > 0);
 
   return (
     <div className="flex flex-col items-center">
@@ -195,6 +214,7 @@ function TreeBranch({
         isRoot={depth === 0}
         side={side}
         isViewer={viewerId === node.id}
+        onFocus={canFocus ? () => onFocusMember!(node.id) : undefined}
       />
       {showChildren ? (
         <div className="flex w-full min-w-[18rem] flex-col items-center sm:min-w-[22rem]">
@@ -208,6 +228,7 @@ function TreeBranch({
                   sponsorCode={sponsorCode}
                   viewerId={viewerId}
                   side="LEFT"
+                  onFocusMember={onFocusMember}
                 />
               ) : (
                 <EmptySlot placementCode={node.memberCode} position="LEFT" sponsorCode={sponsorCode} />
@@ -221,6 +242,7 @@ function TreeBranch({
                   sponsorCode={sponsorCode}
                   viewerId={viewerId}
                   side="RIGHT"
+                  onFocusMember={onFocusMember}
                 />
               ) : (
                 <EmptySlot placementCode={node.memberCode} position="RIGHT" sponsorCode={sponsorCode} />
@@ -237,6 +259,9 @@ export function PairingDiagram({
   tree,
   volume,
   viewerId,
+  focusId,
+  onFocusMember,
+  onResetFocus,
 }: {
   tree: TreeNode;
   volume: {
@@ -248,15 +273,30 @@ export function PairingDiagram({
     payout: number;
   };
   viewerId?: string;
+  focusId?: string;
+  onFocusMember?: (memberId: string) => void;
+  onResetFocus?: () => void;
 }) {
   const { member } = useAuth();
   const sponsorCode = member?.memberCode ?? tree.memberCode;
+  const showReset = Boolean(onResetFocus && focusId && viewerId && focusId !== viewerId);
 
   const leftCarry = volume.carryLeft + volume.leftCount - volume.pairsMatched;
   const rightCarry = volume.carryRight + volume.rightCount - volume.pairsMatched;
 
   return (
     <div className="space-y-6">
+      {showReset ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            onClick={onResetFocus}
+          >
+            Back to my tree
+          </button>
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat label="Today's matched pairs" value={String(volume.pairsMatched)} hint="Capped at 10 / day" />
         <Stat
@@ -272,13 +312,20 @@ export function PairingDiagram({
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        Full genealogy from the top distributor. Tap <span className="font-medium text-foreground">+</span> on an open
-        slot to register with sponsor and placement pre-filled.
+        Showing <span className="font-medium text-foreground">{tree.memberCode}</span> and downline only. Tap a member
+        below to view their leg, or tap <span className="font-medium text-foreground">+</span> on an open slot to
+        register.
       </p>
 
       <div className="overflow-x-auto rounded-xl border bg-gradient-to-b from-muted/30 to-background p-4 sm:p-8">
         <div className="mx-auto w-max min-w-full px-2">
-          <TreeBranch node={tree} depth={0} sponsorCode={sponsorCode} viewerId={viewerId} />
+          <TreeBranch
+            node={tree}
+            depth={0}
+            sponsorCode={sponsorCode}
+            viewerId={viewerId}
+            onFocusMember={onFocusMember}
+          />
         </div>
       </div>
 

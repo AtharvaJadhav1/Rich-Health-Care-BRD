@@ -115,6 +115,7 @@ function DashboardInner() {
   const [tree, setTree] = useState<{
     tree: TreeNode;
     viewerId?: string;
+    focusId?: string;
     volume: {
       leftCount: number;
       rightCount: number;
@@ -144,11 +145,21 @@ function DashboardInner() {
     upiId: "",
   });
 
+  async function loadTree(focusId?: string) {
+    const path = focusId ? `/member/tree?focus=${encodeURIComponent(focusId)}` : "/member/tree";
+    const t = await api<{
+      tree: TreeNode;
+      viewerId?: string;
+      focusId?: string;
+      volume: never;
+    }>(path);
+    setTree(t as never);
+  }
+
   async function load() {
     try {
-      const [w, t, p, o, catalog, plan, teamData, status] = await Promise.all([
+      const [w, p, o, catalog, plan, teamData, status] = await Promise.all([
         api<Wallet>("/member/wallet"),
-        api<{ tree: TreeNode; volume: never }>("/member/tree"),
         api<Payment[]>("/member/payments"),
         api<Order[]>("/member/orders"),
         api<Product[]>("/products"),
@@ -157,7 +168,6 @@ function DashboardInner() {
         api<{ collectionBank: CompanyBank }>("/public/status"),
       ]);
       setWallet(w);
-      setTree(t as never);
       setPayments(p);
       setOrders(o);
       setProducts(catalog);
@@ -165,6 +175,7 @@ function DashboardInner() {
       setJoiningAmount(plan.joiningAmount);
       setTeam(teamData);
       setCompanyBank(status.collectionBank);
+      await loadTree();
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load dashboard");
@@ -422,7 +433,14 @@ function DashboardInner() {
           <CardTitle>Pairing diagram</CardTitle>
         </CardHeader>
         <CardContent>
-          <PairingDiagram tree={tree.tree} volume={tree.volume} viewerId={tree.viewerId ?? member.id} />
+          <PairingDiagram
+            tree={tree.tree}
+            volume={tree.volume}
+            viewerId={tree.viewerId ?? member.id}
+            focusId={tree.focusId}
+            onFocusMember={(id) => loadTree(id).catch((err) => toast.error(err.message))}
+            onResetFocus={() => loadTree().catch((err) => toast.error(err.message))}
+          />
         </CardContent>
       </Card>
 

@@ -21,6 +21,7 @@ function Inner() {
   const [tree, setTree] = useState<{
     tree: TreeNode;
     viewerId?: string;
+    focusId?: string;
     volume: {
       leftCount: number;
       rightCount: number;
@@ -32,13 +33,21 @@ function Inner() {
   } | null>(null);
   const [joiningAmount, setJoiningAmount] = useState(999);
 
-  async function load() {
-    const [t, plan] = await Promise.all([
-      api<{ tree: TreeNode; volume: never }>("/member/tree"),
-      api<{ joiningAmount: number }>("/plan"),
-    ]);
+  async function loadTree(focusId?: string) {
+    const path = focusId ? `/member/tree?focus=${encodeURIComponent(focusId)}` : "/member/tree";
+    const t = await api<{
+      tree: TreeNode;
+      viewerId?: string;
+      focusId?: string;
+      volume: never;
+    }>(path);
     setTree(t as never);
+  }
+
+  async function load() {
+    const plan = await api<{ joiningAmount: number }>("/plan");
     setJoiningAmount(plan.joiningAmount);
+    await loadTree();
   }
 
   useEffect(() => {
@@ -53,14 +62,21 @@ function Inner() {
     <PageShell width="6xl" className="space-y-8">
       <PageHero
         title="Tree"
-        description="Your full genealogy from the top distributor. Red means awaiting admin PIN activation; green means activated."
+        description="Your downline from your ID. Tap a member to view only their leg below them."
       />
       <Card>
         <CardHeader>
           <CardTitle>Pairing diagram</CardTitle>
         </CardHeader>
         <CardContent>
-          <PairingDiagram tree={tree.tree} volume={tree.volume} viewerId={tree.viewerId} />
+          <PairingDiagram
+            tree={tree.tree}
+            volume={tree.volume}
+            viewerId={tree.viewerId}
+            focusId={tree.focusId}
+            onFocusMember={(id) => loadTree(id).catch((err) => toast.error(err.message))}
+            onResetFocus={() => loadTree().catch((err) => toast.error(err.message))}
+          />
         </CardContent>
       </Card>
       <PinControls joiningAmount={joiningAmount} onChanged={load} />
