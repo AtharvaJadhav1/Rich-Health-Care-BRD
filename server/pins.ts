@@ -25,6 +25,33 @@ export function publicPin(pin: {
   };
 }
 
+export async function listUnusedPinsForOwner(ownerId: string) {
+  const pins = await prisma.pin.findMany({
+    where: { ownerId, status: "UNUSED" },
+    orderBy: { createdAt: "desc" },
+  });
+  return Promise.all(
+    pins.map(async (pin) => {
+      const transfer = await prisma.pinTransfer.findFirst({
+        where: { pinId: pin.id, toMemberId: ownerId },
+        orderBy: { transferredAt: "desc" },
+      });
+      const from = transfer
+        ? await prisma.member.findUnique({
+            where: { id: transfer.fromMemberId },
+            select: { memberCode: true, name: true },
+          })
+        : null;
+      return {
+        ...publicPin(pin),
+        transferredFrom: from
+          ? { memberCode: from.memberCode, name: from.name, at: transfer!.transferredAt }
+          : null,
+      };
+    }),
+  );
+}
+
 export async function generateAdminPins(opts: {
   adminId: string;
   count: number;
@@ -179,7 +206,11 @@ export async function rejectPinActivation(pinId: string) {
   return { ok: true };
 }
 
-export async function transferPinToMember(pinId: string, recipientMemberCode: string) {
+export async function transferPinToMember(
+  pinId: string,
+  recipientMemberCode: string,
+  opts?: { fromMemberId?: string; asAdmin?: boolean },
+) {
   const recipient = await prisma.member.findUnique({
     where: { memberCode: recipientMemberCode.trim().toUpperCase() },
   });
@@ -193,9 +224,29 @@ export async function transferPinToMember(pinId: string, recipientMemberCode: st
   if (pin.status !== "UNUSED") {
     throw Object.assign(new Error("Only unused PINs can be transferred."), { statusCode: 400 });
   }
-  return prisma.pin.update({
-    where: { id: pinId },
-    data: { ownerId: recipient.id },
+  if (opts?.fromMemberId && !opts.asAdmin && pin.ownerId !== opts.fromMemberId) {
+    throw Object.assign(new Error("You do not own this PIN."), { statusCode: 403 });
+  }
+  const senderId = pin.ownerId;
+  if (recipient.id === senderId) {
+    throw Object.assign(new Error("Recipient already owns this PIN."), { statusCode: 400 });
+  }
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.pin.update({
+      where: { id: pinId },
+      data: {
+        ownerId: recipient.id,
+        assignedMemberCode: recipient.memberCode,
+      },
+    });
+    await tx.pinTransfer.create({
+      data: {
+        pinId,
+        fromMemberId: senderId,
+        toMemberId: recipient.id,
+      },
+    });
+    return updated;
   });
 }
 

@@ -19,6 +19,7 @@ import {
   rejectPinActivation,
   requestPinActivation,
   adminActivateMemberWithPin,
+  listUnusedPinsForOwner,
   transferPinToMember,
 } from "./pins";
 import { bootstrapCompany, ensurePlanAndCatalog, publicStatus } from "./bootstrap";
@@ -759,20 +760,7 @@ export async function registerRoutes(app: FastifyInstance) {
     if (recipient.id === member.id) {
       return reply.code(400).send({ error: "You already own this PIN." });
     }
-    const updated = await prisma.$transaction(async (tx) => {
-      const next = await tx.pin.update({
-        where: { id: pin.id },
-        data: { ownerId: recipient.id },
-      });
-      await tx.pinTransfer.create({
-        data: {
-          pinId: pin.id,
-          fromMemberId: member.id,
-          toMemberId: recipient.id,
-        },
-      });
-      return next;
-    });
+    const updated = await transferPinToMember(pin.id, body.data.memberCode, { fromMemberId: member.id });
     return publicPin(updated);
   });
 
@@ -789,11 +777,7 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get("/pins/unused", async (request, reply) => {
     const member = await requireAuth(request, reply);
     if (!member) return;
-    const pins = await prisma.pin.findMany({
-      where: { ownerId: member.id, status: "UNUSED" },
-      orderBy: { createdAt: "desc" },
-    });
-    return pins.map(publicPin);
+    return listUnusedPinsForOwner(member.id);
   });
 
   app.get("/admin/payments/pending", async (request, reply) => {
@@ -1003,7 +987,8 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/pins", async (request, reply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    const admin = await requireAdmin(request, reply);
+    if (!admin) return;
     const pending = await prisma.paymentSubmission.findMany({
       where: { purpose: "PIN", status: "PENDING" },
       include: {
@@ -1029,12 +1014,24 @@ export async function registerRoutes(app: FastifyInstance) {
         return { pin: publicPin(pin), member: target, owner: pin.owner };
       }),
     );
+    const myUnused = await listUnusedPinsForOwner(admin.id);
+    const allUnused = await prisma.pin.findMany({
+      where: { status: "UNUSED" },
+      include: { owner: { select: { name: true, memberCode: true } } },
+      orderBy: { createdAt: "desc" },
+    });
     const recent = await prisma.pin.findMany({
       include: { owner: { select: { name: true, memberCode: true } } },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
-    return { pending, activationQueue: activationRows, recent };
+    return {
+      pending,
+      activationQueue: activationRows,
+      myUnused,
+      allUnused: allUnused.map((p) => ({ ...publicPin(p), owner: p.owner })),
+      recent,
+    };
   });
 
   app.post("/admin/pins/generate", async (request, reply) => {
@@ -1114,14 +1111,18 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.post("/admin/pins/:id/transfer", async (request, reply) => {
-    if (!(await requireAdmin(request, reply))) return;
+    const admin = await requireAdmin(request, reply);
+    if (!admin) return;
     const { id } = request.params as { id: string };
     const body = z.object({ memberCode: z.string().min(3) }).safeParse(request.body ?? {});
     if (!body.success) {
       return reply.code(400).send({ error: "Enter the recipient Member ID." });
     }
     try {
-      const pin = await transferPinToMember(id, body.data.memberCode);
+      const pin = await transferPinToMember(id, body.data.memberCode, {
+        fromMemberId: admin.id,
+        asAdmin: true,
+      });
       return { pin: publicPin(pin) };
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode ?? 400;

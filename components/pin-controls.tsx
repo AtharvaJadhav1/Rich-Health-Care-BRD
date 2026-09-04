@@ -25,6 +25,8 @@ export type PinRow = {
   usedAt: string | null;
   usedForMemberId: string | null;
   createdAt: string;
+  assignedMemberCode?: string | null;
+  transferredFrom?: { memberCode: string; name: string; at: string } | null;
 };
 
 type Payment = {
@@ -188,7 +190,14 @@ export function PinControls({
           ) : (
             unused.map((pin) => (
               <div key={pin.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
-                <span className="font-mono text-sm">{pin.code}</span>
+                <div>
+                  <span className="font-mono text-sm">{pin.code}</span>
+                  {pin.transferredFrom ? (
+                    <p className="text-xs text-muted-foreground">
+                      Transferred from {pin.transferredFrom.name} ({pin.transferredFrom.memberCode})
+                    </p>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">UNUSED</Badge>
                   {member?.status === "PENDING_PAYMENT" ? (

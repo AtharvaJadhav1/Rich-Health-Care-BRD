@@ -31,6 +31,19 @@ type Issued = {
   owner: { name: string; memberCode: string };
 };
 
+type UnusedPin = {
+  id: string;
+  code: string;
+  status: string;
+  assignedMemberCode?: string | null;
+  createdAt: string;
+  transferredFrom?: { memberCode: string; name: string; at: string } | null;
+};
+
+type AllUnusedPin = UnusedPin & {
+  owner: { name: string; memberCode: string };
+};
+
 type ActivationRow = {
   pin: Issued;
   member: { id: string; name: string; memberCode: string; phone: string; status: string } | null;
@@ -48,7 +61,8 @@ export default function AdminPinsPage() {
 function Inner() {
   const [pending, setPending] = useState<Pending[] | null>(null);
   const [activationQueue, setActivationQueue] = useState<ActivationRow[]>([]);
-  const [recent, setRecent] = useState<Issued[]>([]);
+  const [myUnused, setMyUnused] = useState<UnusedPin[]>([]);
+  const [allUnused, setAllUnused] = useState<AllUnusedPin[]>([]);
   const [genCount, setGenCount] = useState(10);
   const [assignCode, setAssignCode] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -59,11 +73,13 @@ function Inner() {
     const data = await api<{
       pending: Pending[];
       activationQueue: ActivationRow[];
-      recent: Issued[];
+      myUnused: UnusedPin[];
+      allUnused: AllUnusedPin[];
     }>("/admin/pins");
     setPending(data.pending);
     setActivationQueue(data.activationQueue);
-    setRecent(data.recent);
+    setMyUnused(data.myUnused);
+    setAllUnused(data.allUnused);
   }
 
   useEffect(() => {
@@ -159,7 +175,7 @@ function Inner() {
             ) : null}
           </TabsTrigger>
           <TabsTrigger value="payments">PIN payments</TabsTrigger>
-          <TabsTrigger value="inventory">PIN inventory</TabsTrigger>
+          <TabsTrigger value="unused">Unused PINs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="generate" className="space-y-4 pt-4">
@@ -299,35 +315,29 @@ function Inner() {
           ))}
         </TabsContent>
 
-        <TabsContent value="inventory" className="space-y-4 pt-4">
-          {recent.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No PINs issued yet.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {recent.map((pin) => (
-                <li
-                  key={pin.id}
-                  className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span>
-                    <span className="font-mono font-medium">{pin.code}</span> · {pin.owner.name} (
-                    {pin.owner.memberCode})
-                    {pin.assignedMemberCode ? ` · for ${pin.assignedMemberCode}` : ""}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant={
-                        pin.status === "UNUSED"
-                          ? "secondary"
-                          : pin.status === "PENDING_APPROVAL"
-                            ? "destructive"
-                            : "default"
-                      }
+        <TabsContent value="unused" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Your unused PINs ({myUnused.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {myUnused.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No unused PINs in your account. Generate PINs above, then transfer them to members.
+                </p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {myUnused.map((pin) => (
+                    <li
+                      key={pin.id}
+                      className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      {pin.status.replaceAll("_", " ")}
-                    </Badge>
-                    {pin.status === "UNUSED" ? (
-                      <>
+                      <span>
+                        <span className="font-mono font-medium">{pin.code}</span>
+                        {pin.assignedMemberCode ? ` · for ${pin.assignedMemberCode}` : ""}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">UNUSED</Badge>
                         <Input
                           className="h-8 w-32"
                           placeholder="Transfer to"
@@ -342,13 +352,40 @@ function Inner() {
                         <Button size="sm" variant="outline" onClick={() => transferPin(pin.id)}>
                           Transfer
                         </Button>
-                      </>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>All unused PINs in system ({allUnused.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Includes PINs transferred to members — they appear here until used or submitted for activation.
+              </p>
+              {allUnused.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No unused PINs in the system.</p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {allUnused.map((pin) => (
+                    <li key={pin.id} className="flex flex-col gap-1 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span>
+                        <span className="font-mono font-medium">{pin.code}</span> · held by {pin.owner.name} (
+                        {pin.owner.memberCode})
+                        {pin.assignedMemberCode ? ` · for ${pin.assignedMemberCode}` : ""}
+                      </span>
+                      <Badge variant="secondary">UNUSED</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

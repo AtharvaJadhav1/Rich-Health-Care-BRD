@@ -138,7 +138,7 @@ export function SiteHeader() {
                   ) : null}
                 </Link>
               ))}
-              {member && member.role === "MEMBER" ? (
+              {member && (member.role === "MEMBER" || member.role === "ADMIN") ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-lg px-3 py-2.5 text-base hover:bg-muted">
                     PIN <ChevronDown className="size-3.5" />
