@@ -120,3 +120,40 @@ export async function consumePinForJoining(opts: { code?: string; pinId?: string
   await activateMemberWithPin(member.id);
   return prisma.pin.findUniqueOrThrow({ where: { id: pin.id } });
 }
+
+export async function adminActivateMemberWithPin(opts: {
+  memberId: string;
+  adminId: string;
+  pinId?: string;
+  pinCode?: string;
+  generateIfMissing?: boolean;
+}) {
+  const member = await prisma.member.findUnique({ where: { id: opts.memberId } });
+  if (!member || member.role !== "MEMBER") {
+    throw Object.assign(new Error("Member not found."), { statusCode: 404 });
+  }
+  if (isActiveMemberStatus(member.status)) {
+    throw Object.assign(new Error("This member is already active."), { statusCode: 400 });
+  }
+  if (member.status === "BLOCKED") {
+    throw Object.assign(new Error("Unblock the member before activating."), { statusCode: 400 });
+  }
+
+  let pinId = opts.pinId;
+  if (!pinId && opts.pinCode) {
+    const pin = await findPinByCode(opts.pinCode);
+    if (!pin) {
+      throw Object.assign(new Error("Enter a valid unused PIN code."), { statusCode: 400 });
+    }
+    pinId = pin.id;
+  }
+  if (!pinId && opts.generateIfMissing) {
+    const created = await issuePin(opts.adminId, null, opts.adminId, member.memberCode);
+    pinId = created.id;
+  }
+  if (!pinId) {
+    throw Object.assign(new Error("Select a PIN or choose to generate one."), { statusCode: 400 });
+  }
+
+  return consumePinForJoining({ pinId }, member.id);
+}

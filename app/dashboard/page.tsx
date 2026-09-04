@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { api } from "@/lib/api";
 import { formatDate, inr } from "@/lib/money";
-import { isActiveMemberStatus, statusBadgeVariant, statusLabel } from "@/lib/member-status";
+import { isActiveMemberStatus, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,6 +114,7 @@ function DashboardInner() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [tree, setTree] = useState<{
     tree: TreeNode;
+    viewerId?: string;
     volume: {
       leftCount: number;
       rightCount: number;
@@ -255,22 +256,25 @@ function DashboardInner() {
             Code {member.memberCode} · Rank {member.rank ?? "Distributor"}
           </p>
         </div>
-        <Badge variant={statusBadgeVariant(member.status)}>{statusLabel(member.status)}</Badge>
+        <Badge
+          variant={member.status === "PENDING_PIN" ? "destructive" : statusBadgeVariant(member.status)}
+        >
+          {member.status === "PENDING_PIN" ? treeStatusLabel(member.status) : statusLabel(member.status)}
+        </Badge>
       </div>
 
       {member.status === "PENDING_PIN" ? (
-        <Card className="border-primary/40">
+        <Card className="border-red-500/40 bg-red-50/30">
           <CardHeader>
-            <CardTitle>PIN verification required</CardTitle>
+            <CardTitle className="text-red-800">Awaiting admin activation</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Your registration is complete and free. Enter your Member ID ({member.memberCode}) and the PIN from your
-              sponsor or admin to activate your account. Once verified, your status becomes Green and you join matching.
+              Registration is complete. Your tree position is reserved and shown as{" "}
+              <span className="font-medium text-red-700">Red</span> until admin verifies your PIN. You will turn{" "}
+              <span className="font-medium text-emerald-700">Green</span> after activation and then join matching.
             </p>
-            <Link href="/verify-pin" className={buttonVariants()}>
-              Verify PIN now
-            </Link>
+            <p className="text-sm font-medium">Member ID: {member.memberCode}</p>
           </CardContent>
         </Card>
       ) : null}
@@ -414,7 +418,7 @@ function DashboardInner() {
           <CardTitle>Pairing diagram</CardTitle>
         </CardHeader>
         <CardContent>
-          <PairingDiagram tree={tree.tree} volume={tree.volume} />
+          <PairingDiagram tree={tree.tree} volume={tree.volume} viewerId={tree.viewerId ?? member.id} />
         </CardContent>
       </Card>
 

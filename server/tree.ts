@@ -1,16 +1,24 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { utcDateKey } from "./dates";
 import { leftoverFromSnapshot } from "./matching";
 import { isActiveMemberStatus } from "./member-status";
+import { generateMemberCode } from "./credentials";
 
-export async function placeAtPosition(parentId: string, position: "LEFT" | "RIGHT") {
-  const parent = await prisma.member.findUnique({ where: { id: parentId } });
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+export async function reserveTreeSlot(
+  parentId: string,
+  position: "LEFT" | "RIGHT",
+  db: DbClient = prisma,
+) {
+  const parent = await db.member.findUnique({ where: { id: parentId } });
   if (!parent || parent.role !== "MEMBER") {
-    throw Object.assign(new Error("Placement ID must be an active distributor in the tree."), {
+    throw Object.assign(new Error("Placement ID must be a valid distributor in the tree."), {
       statusCode: 400,
     });
   }
-  const taken = await prisma.member.findFirst({
+  const taken = await db.member.findFirst({
     where: { parentId, position },
   });
   if (taken) {
@@ -20,6 +28,11 @@ export async function placeAtPosition(parentId: string, position: "LEFT" | "RIGH
     );
   }
   return { parentId, position };
+}
+
+/** @deprecated Use reserveTreeSlot inside a transaction. */
+export async function placeAtPosition(parentId: string, position: "LEFT" | "RIGHT") {
+  return reserveTreeSlot(parentId, position);
 }
 
 export async function placeUnderSponsor(sponsorId: string) {
@@ -121,18 +134,54 @@ export type TreeNode = {
   right: TreeNode | null;
 };
 
+function pickChild(children: { id: string; position: string | null; createdAt: Date }[], side: "LEFT" | "RIGHT") {
+  return children.find((c) => c.position === side) ?? null;
+}
+
+export async function findTreeRoot(memberId: string): Promise<string> {
+  let currentId = memberId;
+  for (let guard = 0; guard < 64; guard++) {
+    const row = await prisma.member.findUnique({
+      where: { id: currentId },
+      select: { parentId: true },
+    });
+    if (!row?.parentId) return currentId;
+    currentId = row.parentId;
+  }
+  return currentId;
+}
+
+export async function depthFromRoot(memberId: string): Promise<number> {
+  let depth = 0;
+  let currentId = memberId;
+  for (let guard = 0; guard < 64; guard++) {
+    const row = await prisma.member.findUnique({
+      where: { id: currentId },
+      select: { parentId: true },
+    });
+    if (!row?.parentId) return depth;
+    depth++;
+    currentId = row.parentId;
+  }
+  return depth;
+}
+
 export async function fetchSubtree(rootId: string, depth = 3): Promise<TreeNode | null> {
   const member = await prisma.member.findUnique({ where: { id: rootId } });
   if (!member) return null;
+
   async function walk(id: string, remaining: number): Promise<TreeNode | null> {
     const node = await prisma.member.findUnique({ where: { id } });
     if (!node) return null;
     const children =
       remaining > 0
-        ? await prisma.member.findMany({ where: { parentId: id } })
+        ? await prisma.member.findMany({
+            where: { parentId: id },
+            orderBy: [{ createdAt: "asc" }],
+          })
         : [];
-    const leftChild = children.find((c) => c.position === "LEFT");
-    const rightChild = children.find((c) => c.position === "RIGHT");
+    const leftChild = pickChild(children, "LEFT");
+    const rightChild = pickChild(children, "RIGHT");
     return {
       id: node.id,
       name: node.name,
@@ -144,14 +193,23 @@ export async function fetchSubtree(rootId: string, depth = 3): Promise<TreeNode 
       right: rightChild && remaining > 0 ? await walk(rightChild.id, remaining - 1) : null,
     };
   }
+
   return walk(rootId, depth);
 }
 
+/** Full genealogy from org root through the viewer and their downline. */
+export async function fetchMemberTreeView(memberId: string, depthBelow = 5) {
+  const rootId = await findTreeRoot(memberId);
+  const uplineDepth = await depthFromRoot(memberId);
+  const tree = await fetchSubtree(rootId, uplineDepth + depthBelow);
+  return { tree, rootId, viewerId: memberId, uplineDepth };
+}
+
 export async function nextMemberCode() {
-  const last = await prisma.member.findFirst({
-    where: { memberCode: { startsWith: "RHC" } },
-    orderBy: { memberCode: "desc" },
-  });
-  const n = last ? Number(last.memberCode.replace("RHC", "")) + 1 : 1;
-  return `RHC${String(n).padStart(4, "0")}`;
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const code = generateMemberCode();
+    const taken = await prisma.member.findUnique({ where: { memberCode: code } });
+    if (!taken) return code;
+  }
+  throw new Error("Could not generate a unique Member ID.");
 }

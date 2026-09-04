@@ -20,6 +20,7 @@ export default function TreePage() {
 function Inner() {
   const [tree, setTree] = useState<{
     tree: TreeNode;
+    viewerId?: string;
     volume: {
       leftCount: number;
       rightCount: number;
@@ -52,14 +53,14 @@ function Inner() {
     <PageShell width="6xl" className="space-y-8">
       <PageHero
         title="Tree"
-        description="Your binary genealogy with left/right legs. Tap + on an open slot to register a new member there."
+        description="Your full genealogy from the top distributor. Red means awaiting admin PIN activation; green means activated."
       />
       <Card>
         <CardHeader>
           <CardTitle>Pairing diagram</CardTitle>
         </CardHeader>
         <CardContent>
-          <PairingDiagram tree={tree.tree} volume={tree.volume} />
+          <PairingDiagram tree={tree.tree} volume={tree.volume} viewerId={tree.viewerId} />
         </CardContent>
       </Card>
       <PinControls joiningAmount={joiningAmount} onChanged={load} />

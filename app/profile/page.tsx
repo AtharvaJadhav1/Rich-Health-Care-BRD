@@ -58,12 +58,13 @@ export default function ProfilePage() {
 }
 
 function Inner() {
-  const { refresh } = useAuth();
+  const { member, refresh } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [tree, setTree] = useState<{
     tree: TreeNode;
+    viewerId?: string;
     volume: {
       leftCount: number;
       rightCount: number;
@@ -249,7 +250,7 @@ function Inner() {
               <CardTitle>Genealogy</CardTitle>
             </CardHeader>
             <CardContent>
-              <PairingDiagram tree={tree.tree} volume={tree.volume} />
+              <PairingDiagram tree={tree.tree} volume={tree.volume} viewerId={tree.viewerId ?? member?.id} />
             </CardContent>
           </Card>
         </TabsContent>

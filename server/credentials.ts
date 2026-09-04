@@ -23,6 +23,14 @@ export function generatePinCode() {
   return `PIN-${body}`;
 }
 
+/** Random Member ID like RHC4267 or RHC183492 (4–6 digit suffix, not sequential). */
+export function generateMemberCode() {
+  const digitCount = 4 + randomInt(3);
+  const min = 10 ** (digitCount - 1);
+  const max = 10 ** digitCount - 1;
+  return `RHC${randomInt(min, max + 1)}`;
+}
+
 /** Accepts `PIN-ABC…`, `pin abc…`, or the body only. */
 export function normalizePinCode(value: string) {
   const compact = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");

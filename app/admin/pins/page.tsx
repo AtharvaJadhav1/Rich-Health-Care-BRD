@@ -42,7 +42,9 @@ function Inner() {
   const [recent, setRecent] = useState<Issued[]>([]);
   const [genCount, setGenCount] = useState(1);
   const [assignCode, setAssignCode] = useState("");
+  const [activateOnGenerate, setActivateOnGenerate] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [activateCodes, setActivateCodes] = useState<Record<string, string>>({});
 
   async function load() {
     const data = await api<{ pending: Pending[]; recent: Issued[] }>("/admin/pins");
@@ -71,14 +73,26 @@ function Inner() {
     e.preventDefault();
     setGenerating(true);
     try {
-      const res = await api<{ pins: { code: string }[] }>("/admin/pins/generate", {
+      const memberCode = assignCode.trim().toUpperCase();
+      const res = await api<{
+        pins: { code: string }[];
+        activated?: { code: string };
+        member?: { status: string; memberCode: string };
+      }>("/admin/pins/generate", {
         method: "POST",
         body: {
           count: genCount,
-          ...(assignCode.trim() ? { memberCode: assignCode.trim().toUpperCase() } : {}),
+          ...(memberCode ? { memberCode } : {}),
+          ...(activateOnGenerate && memberCode ? { activate: true } : {}),
         },
       });
-      toast.success(`Generated: ${res.pins.map((p) => p.code).join(", ")}`);
+      if (res.activated && res.member) {
+        toast.success(
+          `Generated ${res.pins.map((p) => p.code).join(", ")} and activated ${res.member.memberCode} — Green`,
+        );
+      } else {
+        toast.success(`Generated: ${res.pins.map((p) => p.code).join(", ")}`);
+      }
       setAssignCode("");
       await load();
     } catch (err) {
@@ -88,15 +102,34 @@ function Inner() {
     }
   }
 
+  async function activatePin(pinId: string, pinCode: string) {
+    const memberCode = activateCodes[pinId]?.trim().toUpperCase();
+    if (!memberCode) {
+      toast.error("Enter the Member ID to activate.");
+      return;
+    }
+    try {
+      const res = await api<{ member: { memberCode: string; status: string } }>(
+        `/admin/pins/${pinId}/activate`,
+        { method: "POST", body: { memberCode } },
+      );
+      toast.success(`PIN ${pinCode} activated for ${res.member.memberCode} — ${res.member.status}`);
+      setActivateCodes((current) => ({ ...current, [pinId]: "" }));
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not activate PIN");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-10">
       <AdminNav />
-      <h1 className="font-heading text-3xl font-semibold">PIN generation</h1>
+      <h1 className="font-heading text-3xl font-semibold">PIN generation & activation</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Generate PINs directly</CardTitle>
+          <CardTitle>Generate PINs</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={directGenerate}>
             <div className="space-y-2">
               <Label htmlFor="genCount">How many</Label>
@@ -116,13 +149,21 @@ function Inner() {
                 id="assignCode"
                 value={assignCode}
                 onChange={(e) => setAssignCode(e.target.value.toUpperCase())}
-                placeholder="Leave blank for open PINs"
+                placeholder="RHC4267"
               />
             </div>
             <Button type="submit" disabled={generating}>
-              {generating ? "Generating…" : "Generate PINs"}
+              {generating ? "Working…" : "Generate PINs"}
             </Button>
           </form>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={activateOnGenerate}
+              onChange={(e) => setActivateOnGenerate(e.target.checked)}
+            />
+            Activate member immediately (requires Member ID above — turns account Green)
+          </label>
         </CardContent>
       </Card>
       <h2 className="text-lg font-medium">PIN payment queue</h2>
@@ -150,18 +191,38 @@ function Inner() {
         </Card>
       ))}
       <div>
-        <h2 className="mb-3 text-lg font-medium">Recently issued</h2>
+        <h2 className="mb-3 text-lg font-medium">Recently issued — activate for a member</h2>
         {recent.length === 0 ? (
           <p className="text-sm text-muted-foreground">No PINs issued yet.</p>
         ) : (
           <ul className="space-y-2 text-sm">
             {recent.map((pin) => (
-              <li key={pin.id} className="flex justify-between rounded-lg border px-3 py-2">
+              <li key={pin.id} className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <span>
-                  <span className="font-mono">{pin.code}</span> · {pin.owner.name} ({pin.owner.memberCode})
+                  <span className="font-mono font-medium">{pin.code}</span> · {pin.owner.name} ({pin.owner.memberCode})
                   {pin.assignedMemberCode ? ` · for ${pin.assignedMemberCode}` : ""}
                 </span>
-                <Badge variant={pin.status === "UNUSED" ? "secondary" : "default"}>{pin.status}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={pin.status === "UNUSED" ? "secondary" : "default"}>{pin.status}</Badge>
+                  {pin.status === "UNUSED" ? (
+                    <>
+                      <Input
+                        className="h-8 w-32"
+                        placeholder="Member ID"
+                        value={activateCodes[pin.id] ?? pin.assignedMemberCode ?? ""}
+                        onChange={(e) =>
+                          setActivateCodes((current) => ({
+                            ...current,
+                            [pin.id]: e.target.value.toUpperCase(),
+                          }))
+                        }
+                      />
+                      <Button size="sm" onClick={() => activatePin(pin.id, pin.code)}>
+                        Activate
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>

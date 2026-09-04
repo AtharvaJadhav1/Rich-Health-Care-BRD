@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "./db";
 import { issuePassword } from "./auth";
 import { isValidPan, normalizePan } from "./credentials";
+import { nextMemberCode } from "./tree";
 import { PRODUCT_CATALOG, RETIRED_PRODUCT_NAMES } from "../lib/catalog";
 
 const DEMO_PRODUCT_NAMES = RETIRED_PRODUCT_NAMES;
@@ -131,6 +132,7 @@ export async function bootstrapCompany(input: {
       wallet: { create: { balance: 0 } },
     },
   });
+  const rootMemberCode = await nextMemberCode();
   const root = await prisma.member.create({
     data: {
       name: input.rootName.trim(),
@@ -139,7 +141,7 @@ export async function bootstrapCompany(input: {
       kycStatus: "VERIFIED",
       password: await bcrypt.hash(rootPassword, 12),
       issuedPassword: rootPassword,
-      memberCode: "RHC0001",
+      memberCode: rootMemberCode,
       role: "MEMBER",
       status: "ACTIVE",
       rank: "Distributor",

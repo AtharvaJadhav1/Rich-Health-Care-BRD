@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { useId } from "react";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/auth-provider";
+import { treeStatusColor, treeStatusLabel } from "@/lib/member-status";
 import { cn } from "@/lib/utils";
 
 export type TreeNode = {
@@ -18,7 +18,7 @@ export type TreeNode = {
   right: TreeNode | null;
 };
 
-const MAX_DEPTH = 4;
+const MAX_DEPTH = 10;
 
 function registerHref(sponsorCode: string, placementCode: string, position: "LEFT" | "RIGHT") {
   const params = new URLSearchParams({
@@ -29,23 +29,44 @@ function registerHref(sponsorCode: string, placementCode: string, position: "LEF
   return `/register?${params.toString()}`;
 }
 
+function StatusDot({ status }: { status: string }) {
+  const color = treeStatusColor(status);
+  return (
+    <span
+      className={cn(
+        "inline-block size-3 rounded-full ring-2 ring-background",
+        color === "green" && "bg-emerald-500",
+        color === "red" && "bg-red-500",
+        color === "muted" && "bg-muted-foreground/50",
+      )}
+      title={treeStatusLabel(status)}
+      aria-label={treeStatusLabel(status)}
+    />
+  );
+}
+
 function MemberCard({
   node,
   isRoot,
   side,
+  isViewer,
 }: {
   node: TreeNode;
   isRoot?: boolean;
   side?: "LEFT" | "RIGHT";
+  isViewer?: boolean;
 }) {
-  const active = node.status === "ACTIVE" || node.status === "GREEN";
+  const color = treeStatusColor(node.status);
   return (
     <div
       className={cn(
         "relative z-10 flex w-[148px] flex-col items-center rounded-xl border bg-card px-3 py-3 text-center shadow-sm transition-shadow hover:shadow-md",
         isRoot && "border-primary ring-2 ring-primary/20",
+        isViewer && "ring-2 ring-primary/40",
         side === "LEFT" && "border-l-4 border-l-sky-500/70",
         side === "RIGHT" && "border-r-4 border-r-amber-500/70",
+        color === "green" && "border-emerald-500/40 bg-emerald-50/40",
+        color === "red" && "border-red-500/40 bg-red-50/40",
       )}
     >
       {side ? (
@@ -58,12 +79,23 @@ function MemberCard({
           {side === "LEFT" ? "Left" : "Right"}
         </span>
       ) : null}
+      <div className="mt-1 flex items-center gap-1.5">
+        <StatusDot status={node.status} />
+        <span
+          className={cn(
+            "text-[10px] font-semibold uppercase",
+            color === "green" && "text-emerald-700",
+            color === "red" && "text-red-700",
+            color === "muted" && "text-muted-foreground",
+          )}
+        >
+          {treeStatusLabel(node.status)}
+        </span>
+      </div>
       <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{node.name}</p>
       <p className="mt-0.5 font-mono text-xs text-muted-foreground">{node.memberCode}</p>
       {node.rank ? <p className="mt-1 text-[10px] text-muted-foreground">{node.rank}</p> : null}
-      <Badge variant={active ? "default" : "secondary"} className="mt-2 text-[10px]">
-        {active ? "Active" : node.status.replaceAll("_", " ")}
-      </Badge>
+      {isViewer ? <p className="mt-1 text-[10px] font-medium text-primary">You</p> : null}
     </div>
   );
 }
@@ -145,32 +177,51 @@ function TreeBranch({
   node,
   depth,
   sponsorCode,
+  viewerId,
   side,
 }: {
   node: TreeNode;
   depth: number;
   sponsorCode: string;
+  viewerId?: string;
   side?: "LEFT" | "RIGHT";
 }) {
   const showChildren = depth < MAX_DEPTH;
 
   return (
     <div className="flex flex-col items-center">
-      <MemberCard node={node} isRoot={depth === 0} side={side} />
+      <MemberCard
+        node={node}
+        isRoot={depth === 0}
+        side={side}
+        isViewer={viewerId === node.id}
+      />
       {showChildren ? (
         <div className="flex w-full min-w-[18rem] flex-col items-center sm:min-w-[22rem]">
           <BranchConnectors />
           <div className="grid w-full grid-cols-2 gap-3 sm:gap-6 md:gap-10">
             <div className="flex flex-col items-center">
               {node.left ? (
-                <TreeBranch node={node.left} depth={depth + 1} sponsorCode={sponsorCode} side="LEFT" />
+                <TreeBranch
+                  node={node.left}
+                  depth={depth + 1}
+                  sponsorCode={sponsorCode}
+                  viewerId={viewerId}
+                  side="LEFT"
+                />
               ) : (
                 <EmptySlot placementCode={node.memberCode} position="LEFT" sponsorCode={sponsorCode} />
               )}
             </div>
             <div className="flex flex-col items-center">
               {node.right ? (
-                <TreeBranch node={node.right} depth={depth + 1} sponsorCode={sponsorCode} side="RIGHT" />
+                <TreeBranch
+                  node={node.right}
+                  depth={depth + 1}
+                  sponsorCode={sponsorCode}
+                  viewerId={viewerId}
+                  side="RIGHT"
+                />
               ) : (
                 <EmptySlot placementCode={node.memberCode} position="RIGHT" sponsorCode={sponsorCode} />
               )}
@@ -185,6 +236,7 @@ function TreeBranch({
 export function PairingDiagram({
   tree,
   volume,
+  viewerId,
 }: {
   tree: TreeNode;
   volume: {
@@ -195,6 +247,7 @@ export function PairingDiagram({
     pairsMatched: number;
     payout: number;
   };
+  viewerId?: string;
 }) {
   const { member } = useAuth();
   const sponsorCode = member?.memberCode ?? tree.memberCode;
@@ -219,17 +272,23 @@ export function PairingDiagram({
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        Tap <span className="font-medium text-foreground">+</span> on an open left or right slot to open
-        registration with sponsor and placement pre-filled.
+        Full genealogy from the top distributor. Tap <span className="font-medium text-foreground">+</span> on an open
+        slot to register with sponsor and placement pre-filled.
       </p>
 
       <div className="overflow-x-auto rounded-xl border bg-gradient-to-b from-muted/30 to-background p-4 sm:p-8">
         <div className="mx-auto w-max min-w-full px-2">
-          <TreeBranch node={tree} depth={0} sponsorCode={sponsorCode} />
+          <TreeBranch node={tree} depth={0} sponsorCode={sponsorCode} viewerId={viewerId} />
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-3 rounded-full bg-emerald-500" /> Green — activated
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-3 rounded-full bg-red-500" /> Red — awaiting admin PIN
+        </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="size-3 rounded-sm border-l-4 border-l-sky-500 bg-card" /> Left leg
         </span>

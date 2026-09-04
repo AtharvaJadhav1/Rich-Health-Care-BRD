@@ -7,10 +7,10 @@ import { requireAdmin, requireStaff } from "./staff";
 import { isActiveMemberStatus } from "./member-status";
 import { utcDateKey } from "./dates";
 import { computeMatching } from "./matching";
-import { activateMember, fetchSubtree, getOrCreateVolume, nextMemberCode, placeAtPosition } from "./tree";
+import { activateMember, fetchMemberTreeView, getOrCreateVolume, nextMemberCode, reserveTreeSlot } from "./tree";
 import { creditWallet } from "./wallet";
 import { isValidPan, normalizePan } from "./credentials";
-import { consumePinForJoining, generateAdminPins, issuePin, publicPin } from "./pins";
+import { consumePinForJoining, generateAdminPins, issuePin, publicPin, adminActivateMemberWithPin } from "./pins";
 import { bootstrapCompany, ensurePlanAndCatalog, publicStatus } from "./bootstrap";
 import {
   approveWeeklyPayout,
@@ -208,46 +208,47 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!placement || placement.role !== "MEMBER") {
       return reply.code(400).send({ error: "Placement ID must be a valid distributor Member ID." });
     }
-    let treePlacement;
     try {
-      treePlacement = await placeAtPosition(placement.id, position);
+      const member = await prisma.$transaction(async (tx) => {
+        const treePlacement = await reserveTreeSlot(placement.id, position, tx);
+        return tx.member.create({
+          data: {
+            name: name.trim(),
+            phone,
+            panNumber,
+            kycStatus: "PENDING",
+            password: await bcrypt.hash(password, 12),
+            memberCode: await nextMemberCode(),
+            sponsorId: sponsor.id,
+            parentId: treePlacement.parentId,
+            position: treePlacement.position,
+            address: at.trim(),
+            city: city.trim(),
+            state: state.trim(),
+            dateOfBirth: new Date(dateOfBirth),
+            role: "MEMBER",
+            status: "PENDING_PIN",
+            rank: "Distributor",
+            wallet: { create: { balance: 0 } },
+          },
+        });
+      });
+      const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
+      const token = signToken({
+        id: fresh.id,
+        role: fresh.role,
+        phone: fresh.phone,
+        memberCode: fresh.memberCode,
+      });
+      return {
+        token,
+        member: publicMember(fresh, { includePan: true }),
+        credentials: { memberCode: fresh.memberCode, password },
+      };
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode ?? 400;
       return reply.code(status).send({ error: err instanceof Error ? err.message : "Invalid placement." });
     }
-    const member = await prisma.member.create({
-      data: {
-        name: name.trim(),
-        phone,
-        panNumber,
-        kycStatus: "PENDING",
-        password: await bcrypt.hash(password, 12),
-        memberCode: await nextMemberCode(),
-        sponsorId: sponsor.id,
-        parentId: treePlacement.parentId,
-        position: treePlacement.position,
-        address: at.trim(),
-        city: city.trim(),
-        state: state.trim(),
-        dateOfBirth: new Date(dateOfBirth),
-        role: "MEMBER",
-        status: "PENDING_PIN",
-        rank: "Distributor",
-        wallet: { create: { balance: 0 } },
-      },
-    });
-    const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
-    const token = signToken({
-      id: fresh.id,
-      role: fresh.role,
-      phone: fresh.phone,
-      memberCode: fresh.memberCode,
-    });
-    return {
-      token,
-      member: publicMember(fresh, { includePan: true }),
-      credentials: { memberCode: fresh.memberCode, password },
-    };
   });
 
   app.post(
@@ -290,38 +291,9 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.post("/auth/verify-pin", async (request, reply) => {
-    const member = await requireAuth(request, reply);
-    if (!member) return;
-    const body = z
-      .object({
-        memberCode: z.string().min(3),
-        pinCode: z.string().min(4),
-      })
-      .safeParse(request.body);
-    if (!body.success) {
-      return reply.code(400).send({ error: "Enter your Member ID and PIN." });
-    }
-    if (member.memberCode !== body.data.memberCode.trim().toUpperCase()) {
-      return reply.code(400).send({ error: "Member ID must match your logged-in account." });
-    }
-    if (isActiveMemberStatus(member.status)) {
-      return reply.code(400).send({ error: "Your account is already verified." });
-    }
-    if (member.status !== "PENDING_PIN" && member.status !== "PENDING_PAYMENT") {
-      return reply.code(400).send({ error: "PIN verification is not available for this account." });
-    }
-    try {
-      const pin = await consumePinForJoining({ code: body.data.pinCode }, member.id);
-      const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
-      return {
-        ok: true,
-        status: fresh.status,
-        pin: publicPin(pin),
-        member: publicMember(fresh, { includePan: true }),
-      };
-    } catch (err) {
-      return reply.code(400).send({ error: err instanceof Error ? err.message : "PIN verification failed." });
-    }
+    return reply.code(403).send({
+      error: "PIN activation is handled by admin. Contact support after registration.",
+    });
   });
 
   app.get("/member/me", async (request, reply) => {
@@ -372,7 +344,7 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get("/member/tree", async (request, reply) => {
     const member = await requireAuth(request, reply);
     if (!member) return;
-    const tree = await fetchSubtree(member.id, 4);
+    const { tree, viewerId } = await fetchMemberTreeView(member.id, 5);
     const today = utcDateKey();
     const volume = await prisma.binaryVolume.findUnique({
       where: { memberId_date: { memberId: member.id, date: today } },
@@ -383,6 +355,7 @@ export async function registerRoutes(app: FastifyInstance) {
     });
     return {
       tree,
+      viewerId,
       today,
       volume: volume ?? {
         leftCount: 0,
@@ -683,6 +656,11 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post("/pins/use", async (request, reply) => {
     const member = await requireAuth(request, reply);
     if (!member) return;
+    if (member.status === "PENDING_PIN") {
+      return reply.code(403).send({
+        error: "Your account is awaiting admin PIN activation. Contact support.",
+      });
+    }
     const body = z
       .object({
         code: z.string().min(4).optional(),
@@ -992,6 +970,7 @@ export async function registerRoutes(app: FastifyInstance) {
       .object({
         count: z.number().int().min(1).max(50).default(1),
         memberCode: z.string().optional(),
+        activate: z.boolean().optional(),
       })
       .safeParse(request.body ?? {});
     if (!body.success) {
@@ -1003,10 +982,95 @@ export async function registerRoutes(app: FastifyInstance) {
         count: body.data.count,
         assignedMemberCode: body.data.memberCode,
       });
+      if (body.data.activate && body.data.memberCode) {
+        const target = await prisma.member.findUnique({
+          where: { memberCode: body.data.memberCode.trim().toUpperCase() },
+        });
+        if (!target) {
+          return reply.code(400).send({ error: "Member ID not found for activation." });
+        }
+        const activated = await adminActivateMemberWithPin({
+          memberId: target.id,
+          adminId: admin.id,
+          pinId: pins[0]?.id,
+        });
+        const fresh = await prisma.member.findUniqueOrThrow({ where: { id: target.id } });
+        return {
+          pins: pins.map(publicPin),
+          activated: publicPin(activated),
+          member: publicMember(fresh, { includePan: true }),
+        };
+      }
       return { pins: pins.map(publicPin) };
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode ?? 400;
       return reply.code(status).send({ error: err instanceof Error ? err.message : "Could not generate PINs." });
+    }
+  });
+
+  app.post("/admin/pins/:id/activate", async (request, reply) => {
+    const admin = await requireAdmin(request, reply);
+    if (!admin) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ memberCode: z.string().min(3) }).safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({ error: "Enter the Member ID to activate." });
+    }
+    const target = await prisma.member.findUnique({
+      where: { memberCode: body.data.memberCode.trim().toUpperCase() },
+    });
+    if (!target || target.role !== "MEMBER") {
+      return reply.code(404).send({ error: "Member not found." });
+    }
+    try {
+      const pin = await adminActivateMemberWithPin({
+        memberId: target.id,
+        adminId: admin.id,
+        pinId: id,
+      });
+      const fresh = await prisma.member.findUniqueOrThrow({ where: { id: target.id } });
+      return {
+        ok: true,
+        pin: publicPin(pin),
+        member: publicMember(fresh, { includePan: true }),
+      };
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : "Could not activate PIN." });
+    }
+  });
+
+  app.post("/admin/members/:id/activate", async (request, reply) => {
+    const admin = await requireAdmin(request, reply);
+    if (!admin) return;
+    const { id } = request.params as { id: string };
+    const body = z
+      .object({
+        pinId: z.string().optional(),
+        pinCode: z.string().optional(),
+        generatePin: z.boolean().optional(),
+      })
+      .safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({ error: "Invalid activation request." });
+    }
+    try {
+      const pin = await adminActivateMemberWithPin({
+        memberId: id,
+        adminId: admin.id,
+        pinId: body.data.pinId,
+        pinCode: body.data.pinCode,
+        generateIfMissing: body.data.generatePin ?? (!body.data.pinId && !body.data.pinCode),
+      });
+      const fresh = await prisma.member.findUniqueOrThrow({ where: { id } });
+      return {
+        ok: true,
+        pin: publicPin(pin),
+        member: publicMember(fresh, { includePan: true }),
+      };
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : "Could not activate member." });
     }
   });
 

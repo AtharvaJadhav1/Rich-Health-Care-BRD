@@ -8,7 +8,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/money";
-import { isActiveMemberStatus, statusBadgeVariant, statusLabel } from "@/lib/member-status";
+import { isActiveMemberStatus, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +92,19 @@ function Inner() {
     }
   }
 
+  async function activateMember(id: string, memberCode: string) {
+    try {
+      const res = await api<{ pin: { code: string }; member: { status: string } }>(
+        `/admin/members/${id}/activate`,
+        { method: "POST", body: { generatePin: true } },
+      );
+      toast.success(`Activated ${memberCode} with PIN ${res.pin.code} — now Green`);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not activate member");
+    }
+  }
+
   async function setRank(id: string, rank: string) {
     try {
       await api(`/admin/members/${id}/rank`, { method: "PATCH", body: { rank } });
@@ -146,7 +159,11 @@ function Inner() {
                   </p>
                 </td>
                 <td>
-                  <Badge variant={statusBadgeVariant(row.status)}>{statusLabel(row.status)}</Badge>
+                  <Badge
+                    variant={row.status === "PENDING_PIN" ? "destructive" : statusBadgeVariant(row.status)}
+                  >
+                    {row.status === "PENDING_PIN" ? treeStatusLabel(row.status) : statusLabel(row.status)}
+                  </Badge>
                 </td>
                 <td>
                   <Badge variant={row.kycStatus === "VERIFIED" ? "default" : "secondary"}>{row.kycStatus}</Badge>
@@ -223,6 +240,11 @@ function Inner() {
                       </form>
                     </DialogContent>
                   </Dialog>
+                  {isAdmin && (row.status === "PENDING_PIN" || row.status === "PENDING_PAYMENT") ? (
+                    <Button size="sm" onClick={() => activateMember(row.id, row.memberCode)}>
+                      Activate PIN
+                    </Button>
+                  ) : null}
                   {row.status === "BLOCKED" ? (
                     <Button variant="outline" onClick={() => setStatus(row.id, "RESTORE")}>
                       Unblock

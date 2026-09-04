@@ -105,7 +105,7 @@ function RegisterForm() {
       <PageShell className="max-w-lg">
         <PageHero
           title="Registration complete"
-          description="Your Member ID is issued below. Sign in with your password, then enter your ID and PIN to activate your account (Green status). Registration is free — no joining payment required."
+          description="Your Member ID is issued below. You appear as Red on the tree until admin activates your PIN. After activation you will show Green."
         />
         <Card>
           <CardHeader>
@@ -115,10 +115,10 @@ function RegisterForm() {
             <p>
               Member ID: <span className="font-mono font-medium">{memberCode}</span>
             </p>
-            <Button className="w-full" onClick={() => router.push("/verify-pin")}>
-              Verify PIN now
-            </Button>
-            <Button className="w-full" variant="outline" onClick={() => router.push("/dashboard")}>
+            <p className="text-sm text-muted-foreground">
+              Status: <span className="font-medium text-red-600">Red — awaiting admin PIN activation</span>
+            </p>
+            <Button className="w-full" onClick={() => router.push("/dashboard")}>
               Go to dashboard
             </Button>
           </CardContent>

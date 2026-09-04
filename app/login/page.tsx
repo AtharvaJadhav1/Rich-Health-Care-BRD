@@ -35,7 +35,7 @@ export default function LoginPage() {
       toast.success("Signed in");
       if (member.role === "ADMIN") router.push("/admin");
       else if (member.role === "SUPPORT") router.push("/admin/members");
-      else if (member.status === "PENDING_PIN") router.push("/verify-pin");
+      else if (member.status === "PENDING_PIN") router.push("/dashboard");
       else router.push("/dashboard");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not sign in");

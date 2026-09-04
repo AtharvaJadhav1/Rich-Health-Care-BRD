@@ -45,6 +45,8 @@ model Member {
   pinsOwned      Pin[]              @relation("PinOwner")
   weeklyPayouts  WeeklyPayout[]
   createdAt      DateTime           @default(now())
+
+  @@unique([parentId, position], map: "Member_binary_slot")
 }
 
 model PaymentSubmission {
