@@ -271,10 +271,14 @@ function DashboardInner() {
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Registration is complete. Your tree position is reserved and shown as{" "}
-              <span className="font-medium text-red-700">Red</span> until admin verifies your PIN. You will turn{" "}
-              <span className="font-medium text-emerald-700">Green</span> after activation and then join matching.
+              <span className="font-medium text-red-700">Red</span>. Enter the PIN from admin on the activation page.
+              After admin approves, your status becomes{" "}
+              <span className="font-medium text-emerald-700">Green</span>.
             </p>
             <p className="text-sm font-medium">Member ID: {member.memberCode}</p>
+            <Link href="/verify-pin" className={buttonVariants()}>
+              Submit PIN for activation
+            </Link>
           </CardContent>
         </Card>
       ) : null}

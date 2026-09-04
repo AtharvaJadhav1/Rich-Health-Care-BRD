@@ -71,13 +71,132 @@ export async function issuePin(
   throw new Error("Could not generate a unique PIN.");
 }
 
-async function findPinByCode(raw: string) {
+export async function findPinByCode(raw: string) {
   const normalized = normalizePinCode(raw);
   if (!normalized) return null;
   const exact = await prisma.pin.findUnique({ where: { code: normalized } });
   if (exact) return exact;
   const candidates = await prisma.pin.findMany();
   return candidates.find((pin) => normalizePinCode(pin.code) === normalized) ?? null;
+}
+
+/** User submits a PIN — queues admin approval instead of instant activation. */
+export async function requestPinActivation(memberId: string, rawCode: string) {
+  const member = await prisma.member.findUniqueOrThrow({ where: { id: memberId } });
+  if (isActiveMemberStatus(member.status)) {
+    throw Object.assign(new Error("Your account is already active."), { statusCode: 400 });
+  }
+  if (member.status === "BLOCKED") {
+    throw Object.assign(new Error("This account is blocked."), { statusCode: 400 });
+  }
+
+  const existing = await prisma.pin.findFirst({
+    where: { usedForMemberId: memberId, status: "PENDING_APPROVAL" },
+  });
+  if (existing) {
+    throw Object.assign(
+      new Error("You already have a PIN waiting for admin approval."),
+      { statusCode: 409 },
+    );
+  }
+
+  const pin = await findPinByCode(rawCode);
+  if (!pin) {
+    throw Object.assign(new Error("Enter a valid PIN code."), { statusCode: 400 });
+  }
+  if (pin.status === "PENDING_APPROVAL" && pin.usedForMemberId === memberId) {
+    throw Object.assign(new Error("This PIN is already submitted and awaiting admin approval."), {
+      statusCode: 409,
+    });
+  }
+  if (pin.status !== "UNUSED") {
+    throw Object.assign(new Error("This PIN is not available."), { statusCode: 400 });
+  }
+  if (pin.assignedMemberCode && pin.assignedMemberCode !== member.memberCode) {
+    throw Object.assign(new Error("This PIN is assigned to a different Member ID."), { statusCode: 400 });
+  }
+
+  const claimed = await prisma.pin.updateMany({
+    where: { id: pin.id, status: "UNUSED" },
+    data: {
+      status: "PENDING_APPROVAL",
+      usedForMemberId: member.id,
+      usedAt: new Date(),
+    },
+  });
+  if (claimed.count !== 1) {
+    throw Object.assign(new Error("This PIN was just used by someone else. Try again."), { statusCode: 409 });
+  }
+  return prisma.pin.findUniqueOrThrow({ where: { id: pin.id } });
+}
+
+/** Admin approves a queued PIN — member turns Green. */
+export async function approvePinActivation(pinId: string) {
+  const pin = await prisma.pin.findUnique({ where: { id: pinId } });
+  if (!pin || pin.status !== "PENDING_APPROVAL" || !pin.usedForMemberId) {
+    throw Object.assign(new Error("No pending activation found for this PIN."), { statusCode: 404 });
+  }
+  const member = await prisma.member.findUnique({ where: { id: pin.usedForMemberId } });
+  if (!member || member.role !== "MEMBER") {
+    throw Object.assign(new Error("Member not found."), { statusCode: 404 });
+  }
+  if (isActiveMemberStatus(member.status)) {
+    await prisma.pin.update({
+      where: { id: pinId },
+      data: { status: "USED", ownerId: member.id },
+    });
+    throw Object.assign(new Error("Member is already active."), { statusCode: 400 });
+  }
+
+  const claimed = await prisma.pin.updateMany({
+    where: { id: pinId, status: "PENDING_APPROVAL" },
+    data: {
+      status: "USED",
+      usedAt: new Date(),
+      ownerId: member.id,
+    },
+  });
+  if (claimed.count !== 1) {
+    throw Object.assign(new Error("This activation was already processed."), { statusCode: 409 });
+  }
+  await activateMemberWithPin(member.id);
+  return prisma.pin.findUniqueOrThrow({ where: { id: pinId } });
+}
+
+export async function rejectPinActivation(pinId: string) {
+  const pin = await prisma.pin.findUnique({ where: { id: pinId } });
+  if (!pin || pin.status !== "PENDING_APPROVAL") {
+    throw Object.assign(new Error("No pending activation found for this PIN."), { statusCode: 404 });
+  }
+  await prisma.pin.update({
+    where: { id: pinId },
+    data: {
+      status: "UNUSED",
+      usedForMemberId: null,
+      usedAt: null,
+    },
+  });
+  return { ok: true };
+}
+
+export async function transferPinToMember(pinId: string, recipientMemberCode: string) {
+  const recipient = await prisma.member.findUnique({
+    where: { memberCode: recipientMemberCode.trim().toUpperCase() },
+  });
+  if (!recipient || recipient.role !== "MEMBER") {
+    throw Object.assign(new Error("Recipient Member ID was not found."), { statusCode: 400 });
+  }
+  const pin = await prisma.pin.findUnique({ where: { id: pinId } });
+  if (!pin) {
+    throw Object.assign(new Error("PIN not found."), { statusCode: 404 });
+  }
+  if (pin.status !== "UNUSED") {
+    throw Object.assign(new Error("Only unused PINs can be transferred."), { statusCode: 400 });
+  }
+  return prisma.pin.update({
+    where: { id: pinId },
+    data: { ownerId: recipient.id },
+  });
 }
 
 export async function consumePinForJoining(opts: { code?: string; pinId?: string }, memberId: string) {
