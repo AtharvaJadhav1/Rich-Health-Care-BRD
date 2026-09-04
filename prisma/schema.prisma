@@ -86,6 +86,7 @@ model Pin {
   generatedBy          String?
   usedAt               DateTime?
   usedForMemberId      String?
+  assignedMemberCode   String?
   transfers            PinTransfer[]
   createdAt            DateTime      @default(now())
 }

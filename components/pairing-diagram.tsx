@@ -38,7 +38,7 @@ function MemberCard({
   isRoot?: boolean;
   side?: "LEFT" | "RIGHT";
 }) {
-  const active = node.status === "ACTIVE";
+  const active = node.status === "ACTIVE" || node.status === "GREEN";
   return (
     <div
       className={cn(

@@ -2,13 +2,15 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { FastifyInstance } from "fastify";
 import { prisma } from "./db";
-import { requireAuth, requireRole, signToken } from "./auth";
+import { requireAuth, signToken } from "./auth";
+import { requireAdmin, requireStaff } from "./staff";
+import { isActiveMemberStatus } from "./member-status";
 import { utcDateKey } from "./dates";
 import { computeMatching } from "./matching";
 import { activateMember, fetchSubtree, getOrCreateVolume, nextMemberCode, placeAtPosition } from "./tree";
 import { creditWallet } from "./wallet";
 import { isValidPan, normalizePan } from "./credentials";
-import { consumePinForJoining, issuePin, publicPin } from "./pins";
+import { consumePinForJoining, generateAdminPins, issuePin, publicPin } from "./pins";
 import { bootstrapCompany, ensurePlanAndCatalog, publicStatus } from "./bootstrap";
 import {
   approveWeeklyPayout,
@@ -30,7 +32,6 @@ const registerSchema = z
     city: z.string().min(2),
     state: z.string().min(2),
     agreeTerms: z.literal(true, { message: "You must agree to the terms and privacy policy." }),
-    pinCode: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -171,7 +172,6 @@ export async function registerRoutes(app: FastifyInstance) {
     const {
       name,
       phone,
-      pinCode,
       sponsorCode,
       placementCode,
       position,
@@ -199,7 +199,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const sponsor = await prisma.member.findUnique({
       where: { memberCode: sponsorCode.trim().toUpperCase() },
     });
-    if (!sponsor || sponsor.status !== "ACTIVE" || sponsor.role !== "MEMBER") {
+    if (!sponsor || !isActiveMemberStatus(sponsor.status) || sponsor.role !== "MEMBER") {
       return reply.code(400).send({ error: "Sponsor ID must be an active distributor Member ID." });
     }
     const placement = await prisma.member.findUnique({
@@ -231,22 +231,11 @@ export async function registerRoutes(app: FastifyInstance) {
         state: state.trim(),
         dateOfBirth: new Date(dateOfBirth),
         role: "MEMBER",
-        status: "PENDING_PAYMENT",
+        status: "PENDING_PIN",
         rank: "Distributor",
         wallet: { create: { balance: 0 } },
       },
     });
-    if (pinCode?.trim()) {
-      try {
-        await consumePinForJoining({ code: pinCode }, member.id);
-      } catch (err) {
-        await prisma.wallet.delete({ where: { memberId: member.id } });
-        await prisma.member.delete({ where: { id: member.id } });
-        return reply.code(400).send({
-          error: err instanceof Error ? err.message : "That PIN could not be used.",
-        });
-      }
-    }
     const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
     const token = signToken({
       id: fresh.id,
@@ -298,6 +287,41 @@ export async function registerRoutes(app: FastifyInstance) {
       memberCode: member.memberCode,
     });
     return { token, member: publicMember(member, { includePan: true }) };
+  });
+
+  app.post("/auth/verify-pin", async (request, reply) => {
+    const member = await requireAuth(request, reply);
+    if (!member) return;
+    const body = z
+      .object({
+        memberCode: z.string().min(3),
+        pinCode: z.string().min(4),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Enter your Member ID and PIN." });
+    }
+    if (member.memberCode !== body.data.memberCode.trim().toUpperCase()) {
+      return reply.code(400).send({ error: "Member ID must match your logged-in account." });
+    }
+    if (isActiveMemberStatus(member.status)) {
+      return reply.code(400).send({ error: "Your account is already verified." });
+    }
+    if (member.status !== "PENDING_PIN" && member.status !== "PENDING_PAYMENT") {
+      return reply.code(400).send({ error: "PIN verification is not available for this account." });
+    }
+    try {
+      const pin = await consumePinForJoining({ code: body.data.pinCode }, member.id);
+      const fresh = await prisma.member.findUniqueOrThrow({ where: { id: member.id } });
+      return {
+        ok: true,
+        status: fresh.status,
+        pin: publicPin(pin),
+        member: publicMember(fresh, { includePan: true }),
+      };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "PIN verification failed." });
+    }
   });
 
   app.get("/member/me", async (request, reply) => {
@@ -507,7 +531,7 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     const cfg = await plan();
     if (body.data.purpose === "JOINING") {
-      if (member.status === "ACTIVE") {
+      if (isActiveMemberStatus(member.status)) {
         return reply.code(400).send({ error: "Joining fee is already approved." });
       }
       if (body.data.amount !== cfg.joiningAmount) {
@@ -517,7 +541,7 @@ export async function registerRoutes(app: FastifyInstance) {
       }
     }
     if (body.data.purpose === "PIN") {
-      if (member.status !== "ACTIVE") {
+      if (!isActiveMemberStatus(member.status)) {
         return reply.code(400).send({ error: "Activate your ID before requesting PINs." });
       }
       if (body.data.amount !== cfg.joiningAmount) {
@@ -634,7 +658,7 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!body.success) {
       return reply.code(400).send({ error: "Enter a UTR / reference number for the PIN payment." });
     }
-    if (member.status !== "ACTIVE") {
+    if (!isActiveMemberStatus(member.status)) {
       return reply.code(400).send({ error: "Activate your ID before requesting PINs." });
     }
     const cfg = await plan();
@@ -739,7 +763,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/payments/pending", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     return prisma.paymentSubmission.findMany({
       where: { status: "PENDING" },
       include: {
@@ -750,7 +774,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/payments", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const q = request.query as { status?: string };
     return prisma.paymentSubmission.findMany({
       where: q.status ? { status: q.status } : undefined,
@@ -762,7 +786,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/payments/export", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const rows = await prisma.paymentSubmission.findMany({
       include: { member: true },
       orderBy: { createdAt: "desc" },
@@ -802,7 +826,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/payments/:id/approve", async (request, reply) => {
-    const admin = await requireRole(request, reply, "ADMIN");
+    const admin = await requireAdmin(request, reply);
     if (!admin) return;
     const { id } = request.params as { id: string };
     const payment = await prisma.paymentSubmission.findUnique({ where: { id } });
@@ -857,7 +881,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/payments/:id/reject", async (request, reply) => {
-    const admin = await requireRole(request, reply, "ADMIN");
+    const admin = await requireAdmin(request, reply);
     if (!admin) return;
     const { id } = request.params as { id: string };
     const body = z.object({ adminNote: z.string().min(2) }).safeParse(request.body);
@@ -881,7 +905,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/kyc/pending", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     return prisma.kycSubmission.findMany({
       where: { status: "PENDING" },
       include: {
@@ -892,7 +916,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/kyc/:id/approve", async (request, reply) => {
-    const admin = await requireRole(request, reply, "ADMIN");
+    const admin = await requireAdmin(request, reply);
     if (!admin) return;
     const { id } = request.params as { id: string };
     const submission = await prisma.kycSubmission.findUnique({ where: { id } });
@@ -914,7 +938,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/kyc/:id/reject", async (request, reply) => {
-    const admin = await requireRole(request, reply, "ADMIN");
+    const admin = await requireAdmin(request, reply);
     if (!admin) return;
     const { id } = request.params as { id: string };
     const body = z.object({ adminNote: z.string().min(2) }).safeParse(request.body);
@@ -945,7 +969,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/pins", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const pending = await prisma.paymentSubmission.findMany({
       where: { purpose: "PIN", status: "PENDING" },
       include: {
@@ -961,8 +985,33 @@ export async function registerRoutes(app: FastifyInstance) {
     return { pending, recent };
   });
 
+  app.post("/admin/pins/generate", async (request, reply) => {
+    const admin = await requireAdmin(request, reply);
+    if (!admin) return;
+    const body = z
+      .object({
+        count: z.number().int().min(1).max(50).default(1),
+        memberCode: z.string().optional(),
+      })
+      .safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({ error: "Enter how many PINs to generate (1–50)." });
+    }
+    try {
+      const pins = await generateAdminPins({
+        adminId: admin.id,
+        count: body.data.count,
+        assignedMemberCode: body.data.memberCode,
+      });
+      return { pins: pins.map(publicPin) };
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode ?? 400;
+      return reply.code(status).send({ error: err instanceof Error ? err.message : "Could not generate PINs." });
+    }
+  });
+
   app.post("/admin/run-matching", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const body = z.object({ date: z.string().optional() }).safeParse(request.body ?? {});
     const date = body.success && body.data.date ? body.data.date : utcDateKey();
     const existing = await prisma.matchingRun.findUnique({ where: { date } });
@@ -974,7 +1023,7 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     const cfg = await plan();
     const members = await prisma.member.findMany({
-      where: { status: "ACTIVE", role: "MEMBER" },
+      where: { role: "MEMBER", status: { in: ["ACTIVE", "GREEN"] } },
     });
     let pairsTotal = 0;
     let payoutTotal = 0;
@@ -1025,12 +1074,12 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/matching/runs", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     return prisma.matchingRun.findMany({ orderBy: { date: "desc" }, take: 30 });
   });
 
   app.get("/admin/members", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireStaff(request, reply))) return;
     const q = request.query as { q?: string; status?: string };
     return prisma.member.findMany({
       where: {
@@ -1065,27 +1114,76 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/members/:id/status", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireStaff(request, reply))) return;
     const { id } = request.params as { id: string };
-    const body = z.object({ status: z.enum(["ACTIVE", "BLOCKED"]) }).safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: "Status must be ACTIVE or BLOCKED." });
+    const body = z.object({ status: z.enum(["BLOCKED", "RESTORE"]) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Status must be BLOCKED or RESTORE." });
+    }
     const member = await prisma.member.findUnique({ where: { id } });
     if (!member || member.role !== "MEMBER") {
       return reply.code(404).send({ error: "Member not found." });
     }
-    if (member.status === "PENDING_PAYMENT" && body.data.status === "ACTIVE") {
-      return reply.code(400).send({
-        error: "Activate members by approving their joining payment, not from this screen.",
-      });
+    if (body.data.status === "BLOCKED") {
+      return prisma.member.update({ where: { id }, data: { status: "BLOCKED" } });
+    }
+    if (member.status !== "BLOCKED") {
+      return reply.code(400).send({ error: "Only blocked members can be restored." });
+    }
+    const nextStatus = member.activatedAt ? "GREEN" : "PENDING_PIN";
+    return prisma.member.update({ where: { id }, data: { status: nextStatus } });
+  });
+
+  app.patch("/admin/members/:id/name", async (request, reply) => {
+    if (!(await requireStaff(request, reply))) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ name: z.string().min(2).max(120) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Enter a valid name." });
+    const member = await prisma.member.findUnique({ where: { id } });
+    if (!member || member.role !== "MEMBER") {
+      return reply.code(404).send({ error: "Member not found." });
     }
     return prisma.member.update({
       where: { id },
-      data: { status: body.data.status },
+      data: { name: body.data.name.trim() },
+    });
+  });
+
+  app.patch("/admin/members/:id/password", async (request, reply) => {
+    if (!(await requireStaff(request, reply))) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ password: z.string().min(8) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "Password must be at least 8 characters." });
+    }
+    const member = await prisma.member.findUnique({ where: { id } });
+    if (!member || member.role !== "MEMBER") {
+      return reply.code(404).send({ error: "Member not found." });
+    }
+    return prisma.member.update({
+      where: { id },
+      data: { password: await bcrypt.hash(body.data.password, 12) },
+    });
+  });
+
+  app.patch("/admin/members/:id/role", async (request, reply) => {
+    if (!(await requireAdmin(request, reply))) return;
+    const { id } = request.params as { id: string };
+    const body = z.object({ role: z.enum(["MEMBER", "SUPPORT"]) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Role must be MEMBER or SUPPORT." });
+    const member = await prisma.member.findUnique({ where: { id } });
+    if (!member) return reply.code(404).send({ error: "Member not found." });
+    if (member.role === "ADMIN") {
+      return reply.code(400).send({ error: "Cannot change the admin role from here." });
+    }
+    return prisma.member.update({
+      where: { id },
+      data: { role: body.data.role },
     });
   });
 
   app.patch("/admin/members/:id/rank", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const { id } = request.params as { id: string };
     const body = z.object({ rank: z.string().min(1) }).safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "Enter a rank label." });
@@ -1096,7 +1194,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/members/:id/report", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const { id } = request.params as { id: string };
     const member = await prisma.member.findUnique({
       where: { id },
@@ -1126,7 +1224,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/weekly-payouts", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const q = request.query as { status?: string; weekStart?: string };
     return prisma.weeklyPayout.findMany({
       where: {
@@ -1153,7 +1251,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/weekly-payouts/export", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const rows = await prisma.weeklyPayout.findMany({
       include: { member: true },
       orderBy: { weekStart: "desc" },
@@ -1198,14 +1296,14 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.post("/admin/weekly-payouts/generate", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const body = z.object({ weekStart: z.string().optional() }).safeParse(request.body ?? {});
     const weekStart = body.success ? body.data.weekStart : undefined;
     return generateWeeklyReports(weekStart);
   });
 
   app.patch("/admin/weekly-payouts/:id/approve", async (request, reply) => {
-    const admin = await requireRole(request, reply, "ADMIN");
+    const admin = await requireAdmin(request, reply);
     if (!admin) return;
     const { id } = request.params as { id: string };
     try {
@@ -1217,7 +1315,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/weekly-payouts/:id/reject", async (request, reply) => {
-    const admin = await requireRole(request, reply, "ADMIN");
+    const admin = await requireAdmin(request, reply);
     if (!admin) return;
     const { id } = request.params as { id: string };
     const body = z.object({ adminNote: z.string().min(2) }).safeParse(request.body);
@@ -1241,7 +1339,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/payouts/export", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const rows = await prisma.ledgerEntry.findMany({
       include: { wallet: { include: { member: true } } },
       orderBy: { createdAt: "desc" },
@@ -1280,12 +1378,12 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/config", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     return plan();
   });
 
   app.patch("/admin/config", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const body = z
       .object({
         joiningAmount: z.number().int().positive(),
@@ -1301,13 +1399,13 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/company", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     await ensurePlanAndCatalog();
     return prisma.companySettings.findUniqueOrThrow({ where: { id: "default" } });
   });
 
   app.patch("/admin/company", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const body = z
       .object({
         companyName: z.string().min(2),
@@ -1328,19 +1426,19 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/products", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireStaff(request, reply))) return;
     return prisma.product.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
   });
 
   app.post("/admin/products", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const body = productSchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "Fill product name, DP, MRP, and stock." });
     return prisma.product.create({ data: body.data });
   });
 
   app.patch("/admin/products/:id", async (request, reply) => {
-    if (!(await requireRole(request, reply, "ADMIN"))) return;
+    if (!(await requireAdmin(request, reply))) return;
     const { id } = request.params as { id: string };
     const body = productSchema.partial().safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "Invalid product fields." });

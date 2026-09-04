@@ -1,7 +1,7 @@
-import { Member } from "@prisma/client";
 import { prisma } from "./db";
 import { utcDateKey } from "./dates";
 import { leftoverFromSnapshot } from "./matching";
+import { isActiveMemberStatus } from "./member-status";
 
 export async function placeAtPosition(parentId: string, position: "LEFT" | "RIGHT") {
   const parent = await prisma.member.findUnique({ where: { id: parentId } });
@@ -63,7 +63,7 @@ export async function getOrCreateVolume(memberId: string, date = utcDateKey()) {
 
 export async function activateMember(memberId: string) {
   const member = await prisma.member.findUniqueOrThrow({ where: { id: memberId } });
-  if (member.status === "ACTIVE") return member;
+  if (isActiveMemberStatus(member.status)) return member;
   const updated = await prisma.member.update({
     where: { id: memberId },
     data: { status: "ACTIVE", activatedAt: new Date() },
@@ -72,8 +72,19 @@ export async function activateMember(memberId: string) {
   return updated;
 }
 
-export async function countActivationTowardUpline(member: Member) {
-  if (member.status !== "ACTIVE") return;
+export async function activateMemberWithPin(memberId: string) {
+  const member = await prisma.member.findUniqueOrThrow({ where: { id: memberId } });
+  if (isActiveMemberStatus(member.status)) return member;
+  const updated = await prisma.member.update({
+    where: { id: memberId },
+    data: { status: "GREEN", activatedAt: new Date() },
+  });
+  await countActivationTowardUpline(updated);
+  return updated;
+}
+
+export async function countActivationTowardUpline(member: { id: string; status: string; position: string | null }) {
+  if (!isActiveMemberStatus(member.status)) return;
   let currentId = member.id;
   let currentPosition = member.position;
   const date = utcDateKey();

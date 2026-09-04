@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { isStaffRole } from "@/lib/member-status";
 
 const publicLinks = [
   { href: "/", label: "Home" },
@@ -46,7 +47,8 @@ export function SiteHeader() {
     pathname.startsWith("/kyc") ||
     pathname.startsWith("/pins") ||
     pathname.startsWith("/profile") ||
-    pathname.startsWith("/tree");
+    pathname.startsWith("/tree") ||
+    pathname.startsWith("/verify-pin");
 
   const memberLinks = member
     ? [
@@ -55,7 +57,7 @@ export function SiteHeader() {
         { href: "/kyc", label: "KYC" },
         { href: "/profile", label: "Profile" },
         { href: "/tree", label: "Tree" },
-        ...(member.role === "ADMIN" ? [{ href: "/admin", label: "Admin" }] : []),
+        ...(isStaffRole(member.role) ? [{ href: "/admin", label: "Admin" }] : []),
       ]
     : publicLinks;
 
@@ -136,7 +138,7 @@ export function SiteHeader() {
                   ) : null}
                 </Link>
               ))}
-              {member && member.role !== "ADMIN" ? (
+              {member && member.role === "MEMBER" ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-lg px-3 py-2.5 text-base hover:bg-muted">
                     PIN <ChevronDown className="size-3.5" />

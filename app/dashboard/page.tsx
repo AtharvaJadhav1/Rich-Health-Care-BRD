@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { api } from "@/lib/api";
 import { formatDate, inr } from "@/lib/money";
+import { isActiveMemberStatus, statusBadgeVariant, statusLabel } from "@/lib/member-status";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -254,8 +255,25 @@ function DashboardInner() {
             Code {member.memberCode} · Rank {member.rank ?? "Distributor"}
           </p>
         </div>
-        <Badge variant={member.status === "ACTIVE" ? "default" : "secondary"}>{member.status.replaceAll("_", " ")}</Badge>
+        <Badge variant={statusBadgeVariant(member.status)}>{statusLabel(member.status)}</Badge>
       </div>
+
+      {member.status === "PENDING_PIN" ? (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle>PIN verification required</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Your registration is complete and free. Enter your Member ID ({member.memberCode}) and the PIN from your
+              sponsor or admin to activate your account. Once verified, your status becomes Green and you join matching.
+            </p>
+            <Link href="/verify-pin" className={buttonVariants()}>
+              Verify PIN now
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {member.status === "PENDING_PAYMENT" ? (
         <Card className="border-accent">
@@ -484,9 +502,7 @@ function DashboardInner() {
                       </td>
                       <td>{row.position ?? "—"}</td>
                       <td>
-                        <Badge variant={row.status === "ACTIVE" ? "default" : "secondary"}>
-                          {row.status.replaceAll("_", " ")}
-                        </Badge>
+                        <Badge variant={statusBadgeVariant(row.status)}>{statusLabel(row.status)}</Badge>
                       </td>
                       <td>{row.joiningPaymentStatus ?? "Not submitted"}</td>
                       <td>{inr(row.generatedAmount)}</td>
@@ -559,7 +575,7 @@ function DashboardInner() {
           </form>
         </TabsContent>
         <TabsContent value="orders" className="space-y-6 pt-4">
-          {member.status === "ACTIVE" ? (
+          {isActiveMemberStatus(member.status) ? (
             <form className="grid gap-3 rounded-xl border p-4 md:grid-cols-4" onSubmit={placeOrder}>
               <div className="space-y-2 md:col-span-2">
                 <Label>Product</Label>

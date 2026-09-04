@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { creditWallet } from "./wallet";
+import { isActiveMemberStatus } from "./member-status";
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
@@ -76,7 +77,7 @@ export async function collectDownline(rootId: string): Promise<DownlineRow[]> {
         status: child.status,
         position: child.position,
         rank: child.rank,
-        joiningPaymentStatus: joining?.status ?? (child.status === "ACTIVE" ? "APPROVED" : null),
+        joiningPaymentStatus: joining?.status ?? (isActiveMemberStatus(child.status) ? "APPROVED" : null),
         generatedAmount,
         walletBalance: child.wallet?.balance ?? 0,
         activatedAt: child.activatedAt?.toISOString() ?? null,
@@ -128,8 +129,8 @@ export async function memberTeamSummary(memberId: string) {
     weekStart,
     weekEnd,
     downlineCount: downline.length,
-    downlineActive: downline.filter((d) => d.status === "ACTIVE").length,
-    downlinePending: downline.filter((d) => d.status === "PENDING_PAYMENT").length,
+    downlineActive: downline.filter((d) => isActiveMemberStatus(d.status)).length,
+    downlinePending: downline.filter((d) => d.status === "PENDING_PAYMENT" || d.status === "PENDING_PIN").length,
     downlineBlocked: downline.filter((d) => d.status === "BLOCKED").length,
     generatedThisWeek: income.generatedAmount,
     matchingThisWeek: income.matchingAmount,
@@ -170,8 +171,8 @@ export async function generateWeeklyReports(weekStart?: string) {
         matchingAmount: income.matchingAmount,
         retailAmount: income.retailAmount,
         downlineTotal: downline.length,
-        downlineActive: downline.filter((d) => d.status === "ACTIVE").length,
-        downlinePending: downline.filter((d) => d.status === "PENDING_PAYMENT").length,
+        downlineActive: downline.filter((d) => isActiveMemberStatus(d.status)).length,
+        downlinePending: downline.filter((d) => d.status === "PENDING_PAYMENT" || d.status === "PENDING_PIN").length,
         teamReport: JSON.stringify(downline),
         status: "PENDING",
       },

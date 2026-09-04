@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
 
-const links = [
+const adminLinks = [
   { href: "/admin", label: "Payments" },
   { href: "/admin/kyc", label: "KYC" },
   { href: "/admin/pins", label: "PINs" },
@@ -15,8 +16,16 @@ const links = [
   { href: "/admin/config", label: "Plan config" },
 ];
 
+const supportLinks = [
+  { href: "/admin/members", label: "Members" },
+  { href: "/admin/products", label: "Products" },
+];
+
 export function AdminNav() {
   const pathname = usePathname();
+  const { member } = useAuth();
+  const links = member?.role === "SUPPORT" ? supportLinks : adminLinks;
+
   return (
     <nav className="flex gap-2 overflow-x-auto pb-2">
       {links.map((link) => (

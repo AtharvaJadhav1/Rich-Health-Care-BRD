@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RequireAuth } from "@/components/require-auth";
 import { AdminNav } from "@/components/admin-nav";
+import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -24,13 +25,15 @@ type Product = {
 
 export default function AdminProductsPage() {
   return (
-    <RequireAuth role="ADMIN">
+    <RequireAuth role="STAFF">
       <Inner />
     </RequireAuth>
   );
 }
 
 function Inner() {
+  const { member } = useAuth();
+  const isAdmin = member?.role === "ADMIN";
   const empty = { name: "", description: "", dp: 999, mrp: 1499, stock: 0, imageUrl: "" };
   const [form, setForm] = useState(empty);
   const [rows, setRows] = useState<Product[] | null>(null);
@@ -75,60 +78,64 @@ function Inner() {
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-10">
       <AdminNav />
       <h1 className="font-heading text-3xl font-semibold">Products</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Add product</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-3 md:grid-cols-5" onSubmit={create}>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </div>
-            <div className="space-y-2 md:col-span-3">
-              <Label>Description</Label>
-              <Input
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2 md:col-span-5">
-              <Label>Image URL</Label>
-              <Input
-                value={form.imageUrl}
-                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>DP</Label>
-              <Input
-                type="number"
-                value={form.dp}
-                onChange={(e) => setForm({ ...form, dp: Number(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>MRP</Label>
-              <Input
-                type="number"
-                value={form.mrp}
-                onChange={(e) => setForm({ ...form, mrp: Number(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Stock</Label>
-              <Input
-                type="number"
-                value={form.stock}
-                onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })}
-              />
-            </div>
-            <div className="md:col-span-5">
-              <Button type="submit">Save product</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      {!isAdmin ? (
+        <p className="text-sm text-muted-foreground">View-only access for support staff.</p>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add product</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-3 md:grid-cols-5" onSubmit={create}>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              </div>
+              <div className="space-y-2 md:col-span-3">
+                <Label>Description</Label>
+                <Input
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-5">
+                <Label>Image URL</Label>
+                <Input
+                  value={form.imageUrl}
+                  onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>DP</Label>
+                <Input
+                  type="number"
+                  value={form.dp}
+                  onChange={(e) => setForm({ ...form, dp: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>MRP</Label>
+                <Input
+                  type="number"
+                  value={form.mrp}
+                  onChange={(e) => setForm({ ...form, mrp: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Stock</Label>
+                <Input
+                  type="number"
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })}
+                />
+              </div>
+              <div className="md:col-span-5">
+                <Button type="submit">Save product</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
       {!rows ? <p className="text-muted-foreground">Loading products…</p> : null}
       <ul className="space-y-2">
         {rows?.map((p) => (
@@ -137,19 +144,24 @@ function Inner() {
               <p className="font-medium">{p.name}</p>
               <p className="text-sm text-muted-foreground">
                 DP {inr(p.dp)} · MRP {inr(p.mrp)} · {p.active ? "Active" : "Hidden"}
+                {p.description ? ` · ${p.description}` : ""}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Input
-                className="w-24"
-                type="number"
-                defaultValue={p.stock}
-                onBlur={(e) => saveStock(p, Number(e.target.value))}
-              />
-              <Button variant="outline" onClick={() => toggle(p)}>
-                {p.active ? "Hide" : "Show"}
-              </Button>
-            </div>
+            {isAdmin ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  className="w-24"
+                  type="number"
+                  defaultValue={p.stock}
+                  onBlur={(e) => saveStock(p, Number(e.target.value))}
+                />
+                <Button variant="outline" onClick={() => toggle(p)}>
+                  {p.active ? "Hide" : "Show"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Stock: {p.stock}</p>
+            )}
           </li>
         ))}
       </ul>

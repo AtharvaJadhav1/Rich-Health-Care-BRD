@@ -47,7 +47,6 @@ type AuthState = {
     city: string;
     state: string;
     agreeTerms: true;
-    pinCode?: string;
   }) => Promise<{ member: Member; credentials: IssuedCredentials }>;
   logout: () => void;
   refresh: () => Promise<void>;
