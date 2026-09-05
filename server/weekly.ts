@@ -130,7 +130,9 @@ export async function memberTeamSummary(memberId: string) {
     weekEnd,
     downlineCount: downline.length,
     downlineActive: downline.filter((d) => isActiveMemberStatus(d.status)).length,
-    downlinePending: downline.filter((d) => d.status === "PENDING_PAYMENT" || d.status === "PENDING_PIN").length,
+    downlinePending: downline.filter(
+      (d) => d.status === "PENDING_PAYMENT" || d.status === "PENDING_PIN" || d.status === "PENDING_APPROVAL",
+    ).length,
     downlineBlocked: downline.filter((d) => d.status === "BLOCKED").length,
     generatedThisWeek: income.generatedAmount,
     matchingThisWeek: income.matchingAmount,
@@ -172,7 +174,9 @@ export async function generateWeeklyReports(weekStart?: string) {
         retailAmount: income.retailAmount,
         downlineTotal: downline.length,
         downlineActive: downline.filter((d) => isActiveMemberStatus(d.status)).length,
-        downlinePending: downline.filter((d) => d.status === "PENDING_PAYMENT" || d.status === "PENDING_PIN").length,
+        downlinePending: downline.filter(
+      (d) => d.status === "PENDING_PAYMENT" || d.status === "PENDING_PIN" || d.status === "PENDING_APPROVAL",
+    ).length,
         teamReport: JSON.stringify(downline),
         status: "PENDING",
       },

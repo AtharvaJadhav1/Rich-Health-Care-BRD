@@ -18,6 +18,9 @@ export async function reserveTreeSlot(
       statusCode: 400,
     });
   }
+  if (parent.status === "BLOCKED") {
+    throw Object.assign(new Error("This placement ID is blocked."), { statusCode: 400 });
+  }
   const taken = await db.member.findFirst({
     where: { parentId, position },
   });
@@ -138,6 +141,18 @@ function pickChild(children: { id: string; position: string | null; createdAt: D
   return children.find((c) => c.position === side) ?? null;
 }
 
+async function treeDisplayStatus(memberId: string, status: string) {
+  if (status === "PENDING_APPROVAL") return status;
+  if (status === "PENDING_PIN" || status === "PENDING_PAYMENT") {
+    const pendingPin = await prisma.pin.findFirst({
+      where: { usedForMemberId: memberId, status: "PENDING_APPROVAL" },
+      select: { id: true },
+    });
+    if (pendingPin) return "PENDING_APPROVAL";
+  }
+  return status;
+}
+
 export async function findTreeRoot(memberId: string): Promise<string> {
   let currentId = memberId;
   for (let guard = 0; guard < 64; guard++) {
@@ -182,12 +197,13 @@ export async function fetchSubtree(rootId: string, depth = 3): Promise<TreeNode 
         : [];
     const leftChild = pickChild(children, "LEFT");
     const rightChild = pickChild(children, "RIGHT");
+    const displayStatus = await treeDisplayStatus(node.id, node.status);
     return {
       id: node.id,
       name: node.name,
       memberCode: node.memberCode,
       position: node.position,
-      status: node.status,
+      status: displayStatus,
       rank: node.rank,
       left: leftChild && remaining > 0 ? await walk(leftChild.id, remaining - 1) : null,
       right: rightChild && remaining > 0 ? await walk(rightChild.id, remaining - 1) : null,

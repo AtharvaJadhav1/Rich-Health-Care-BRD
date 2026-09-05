@@ -391,9 +391,9 @@ export function PairingDiagram({
           <span className="inline-flex items-center gap-1.5">
             <span className="size-3 rounded-full bg-emerald-500" /> Green — activated
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-3 rounded-full bg-red-500" /> Red — awaiting admin PIN
-          </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-3 rounded-full bg-red-500" /> Red — awaiting PIN / admin approval
+        </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="size-3 rounded-sm border-l-4 border-l-sky-500 bg-card" /> Left leg
           </span>

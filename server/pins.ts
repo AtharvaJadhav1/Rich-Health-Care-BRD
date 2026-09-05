@@ -154,6 +154,10 @@ export async function requestPinActivation(memberId: string, rawCode: string) {
   if (claimed.count !== 1) {
     throw Object.assign(new Error("This PIN was just used by someone else. Try again."), { statusCode: 409 });
   }
+  await prisma.member.update({
+    where: { id: member.id },
+    data: { status: "PENDING_APPROVAL" },
+  });
   return prisma.pin.findUniqueOrThrow({ where: { id: pin.id } });
 }
 
@@ -195,13 +199,21 @@ export async function rejectPinActivation(pinId: string) {
   if (!pin || pin.status !== "PENDING_APPROVAL") {
     throw Object.assign(new Error("No pending activation found for this PIN."), { statusCode: 404 });
   }
-  await prisma.pin.update({
-    where: { id: pinId },
-    data: {
-      status: "UNUSED",
-      usedForMemberId: null,
-      usedAt: null,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.pin.update({
+      where: { id: pinId },
+      data: {
+        status: "UNUSED",
+        usedForMemberId: null,
+        usedAt: null,
+      },
+    });
+    if (pin.usedForMemberId) {
+      await tx.member.update({
+        where: { id: pin.usedForMemberId },
+        data: { status: "PENDING_PIN" },
+      });
+    }
   });
   return { ok: true };
 }

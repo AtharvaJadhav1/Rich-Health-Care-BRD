@@ -7,13 +7,18 @@ export function isStaffRole(role: string) {
 }
 
 export function isPendingActivation(status: string) {
-  return status === "PENDING_PIN" || status === "PENDING_PAYMENT";
+  return status === "PENDING_PIN" || status === "PENDING_PAYMENT" || status === "PENDING_APPROVAL";
+}
+
+export function canSponsorMembers(status: string) {
+  return status !== "BLOCKED";
 }
 
 export function statusLabel(status: string) {
   if (status === "GREEN") return "Green";
   if (status === "ACTIVE") return "Active";
   if (status === "PENDING_PIN") return "Pending activation";
+  if (status === "PENDING_APPROVAL") return "Awaiting approval";
   if (status === "PENDING_PAYMENT") return "Pending payment";
   return status.replaceAll("_", " ");
 }
@@ -33,6 +38,7 @@ export function treeStatusColor(status: string): "green" | "red" | "muted" {
 
 export function treeStatusLabel(status: string) {
   if (isActiveMemberStatus(status)) return "Green";
+  if (status === "PENDING_APPROVAL") return "Awaiting approval";
   if (isPendingActivation(status)) return "Red";
   if (status === "BLOCKED") return "Blocked";
   return statusLabel(status);

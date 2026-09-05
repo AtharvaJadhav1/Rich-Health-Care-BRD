@@ -8,7 +8,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/money";
-import { isActiveMemberStatus, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
+import { isActiveMemberStatus, isPendingActivation, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -160,9 +160,9 @@ function Inner() {
                 </td>
                 <td>
                   <Badge
-                    variant={row.status === "PENDING_PIN" ? "destructive" : statusBadgeVariant(row.status)}
+                    variant={isPendingActivation(row.status) ? "destructive" : statusBadgeVariant(row.status)}
                   >
-                    {row.status === "PENDING_PIN" ? treeStatusLabel(row.status) : statusLabel(row.status)}
+                    {isPendingActivation(row.status) ? treeStatusLabel(row.status) : statusLabel(row.status)}
                   </Badge>
                 </td>
                 <td>
@@ -240,7 +240,7 @@ function Inner() {
                       </form>
                     </DialogContent>
                   </Dialog>
-                  {isAdmin && (row.status === "PENDING_PIN" || row.status === "PENDING_PAYMENT") ? (
+                  {isAdmin && isPendingActivation(row.status) ? (
                     <Button size="sm" onClick={() => activateMember(row.id, row.memberCode)}>
                       Activate PIN
                     </Button>
@@ -249,7 +249,7 @@ function Inner() {
                     <Button variant="outline" onClick={() => setStatus(row.id, "RESTORE")}>
                       Unblock
                     </Button>
-                  ) : isActiveMemberStatus(row.status) || row.status === "PENDING_PIN" || row.status === "PENDING_PAYMENT" ? (
+                  ) : isActiveMemberStatus(row.status) || isPendingActivation(row.status) ? (
                     <Button variant="destructive" onClick={() => setStatus(row.id, "BLOCKED")}>
                       Block
                     </Button>

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
-import { isActiveMemberStatus } from "@/lib/member-status";
+import { isActiveMemberStatus, isPendingActivation } from "@/lib/member-status";
 import { PageHero, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,12 @@ function Inner() {
     setMemberCode(member.memberCode);
     if (isActiveMemberStatus(member.status)) {
       router.replace("/dashboard");
+      return;
+    }
+    if (member.status === "PENDING_APPROVAL") {
+      api<{ pending: { code: string } | null }>("/member/pin-activation")
+        .then((data) => setPendingPin(data.pending))
+        .catch(() => {});
       return;
     }
     api<{ pending: { code: string } | null }>("/member/pin-activation")
@@ -73,17 +79,21 @@ function Inner() {
         title="Submit your PIN"
         description="Enter the PIN shared by admin or your sponsor. Your account stays Red until admin approves — then you turn Green."
       />
-      {pendingPin ? (
+      {pendingPin || member.status === "PENDING_APPROVAL" ? (
         <Card className="border-amber-500/40 bg-amber-50/30">
           <CardHeader>
             <CardTitle className="text-amber-900">Awaiting admin approval</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p>
-              PIN <span className="font-mono font-medium">{pendingPin.code}</span> is submitted and waiting for admin
-              to approve.
+              PIN{" "}
+              <span className="font-mono font-medium">{pendingPin?.code ?? "submitted"}</span> is waiting for admin to
+              approve.
             </p>
             <Badge variant="secondary">Pending approval</Badge>
+            <Button className="mt-3 w-full" variant="outline" onClick={() => router.push("/tree")}>
+              Open tree and add members
+            </Button>
           </CardContent>
         </Card>
       ) : (

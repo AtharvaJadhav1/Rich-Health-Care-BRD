@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { api } from "@/lib/api";
 import { formatDate, inr } from "@/lib/money";
-import { isActiveMemberStatus, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
+import { isActiveMemberStatus, isPendingActivation, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -268,10 +268,8 @@ function DashboardInner() {
             Code {member.memberCode} · Rank {member.rank ?? "Distributor"}
           </p>
         </div>
-        <Badge
-          variant={member.status === "PENDING_PIN" ? "destructive" : statusBadgeVariant(member.status)}
-        >
-          {member.status === "PENDING_PIN" ? treeStatusLabel(member.status) : statusLabel(member.status)}
+        <Badge variant={isPendingActivation(member.status) ? "destructive" : statusBadgeVariant(member.status)}>
+          {isPendingActivation(member.status) ? treeStatusLabel(member.status) : statusLabel(member.status)}
         </Badge>
       </div>
 
@@ -290,6 +288,24 @@ function DashboardInner() {
             <p className="text-sm font-medium">Member ID: {member.memberCode}</p>
             <Link href="/verify-pin" className={buttonVariants()}>
               Submit PIN for activation
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {member.status === "PENDING_APPROVAL" ? (
+        <Card className="border-red-500/40 bg-red-50/30">
+          <CardHeader>
+            <CardTitle className="text-red-800">PIN awaiting admin approval</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Your PIN is submitted. You stay <span className="font-medium text-red-700">Red</span> in the tree until
+              admin approves. You can still sponsor new members from your tree using the{" "}
+              <span className="font-medium text-foreground">+</span> slots below.
+            </p>
+            <Link href="/tree" className={buttonVariants({ variant: "outline" })}>
+              Open tree
             </Link>
           </CardContent>
         </Card>

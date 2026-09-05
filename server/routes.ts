@@ -4,7 +4,7 @@ import { FastifyInstance } from "fastify";
 import { prisma } from "./db";
 import { MAX_ACCOUNTS_PER_PHONE, requireAuth, resolveLoginMember, signToken, countMembersByPhone } from "./auth";
 import { requireAdmin, requireStaff } from "./staff";
-import { isActiveMemberStatus } from "./member-status";
+import { isActiveMemberStatus, canSponsorMembers } from "./member-status";
 import { utcDateKey } from "./dates";
 import { computeMatching } from "./matching";
 import {
@@ -219,7 +219,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const sponsor = await prisma.member.findUnique({
       where: { memberCode: sponsorCode.trim().toUpperCase() },
     });
-    if (!sponsor || sponsor.role !== "MEMBER" || sponsor.status === "BLOCKED") {
+    if (!sponsor || sponsor.role !== "MEMBER" || !canSponsorMembers(sponsor.status)) {
       return reply.code(400).send({ error: "Sponsor ID must be a valid distributor Member ID." });
     }
     const placement = await prisma.member.findUnique({
@@ -323,6 +323,9 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     if (isActiveMemberStatus(member.status)) {
       return reply.code(400).send({ error: "Your account is already active." });
+    }
+    if (member.status === "PENDING_APPROVAL") {
+      return reply.code(409).send({ error: "Your PIN is already awaiting admin approval." });
     }
     if (member.status !== "PENDING_PIN" && member.status !== "PENDING_PAYMENT") {
       return reply.code(400).send({ error: "PIN verification is not available for this account." });
