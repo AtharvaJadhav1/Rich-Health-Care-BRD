@@ -1,13 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
-import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { api } from "@/lib/api";
-import { formatDate, inr } from "@/lib/money";
+import { inr } from "@/lib/money";
 import { isActiveMemberStatus, isPendingActivation, statusBadgeVariant, statusLabel, treeStatusLabel } from "@/lib/member-status";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -23,20 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type Wallet = {
-  balance: number;
-  ledger: {
-    id: string;
-    type: string;
-    amount: number;
-    grossAmount: number | null;
-    gstCut: number | null;
-    adminCut: number | null;
-    note: string | null;
-    createdAt: string;
-  }[];
-};
 
 type Payment = {
   id: string;
@@ -73,34 +58,12 @@ type TeamSummary = {
   downlineCount: number;
   downlineActive: number;
   downlinePending: number;
-  downlineBlocked: number;
   generatedThisWeek: number;
-  matchingThisWeek: number;
-  retailThisWeek: number;
   lifetimeGenerated: number;
-  walletBalance: number;
-  downline: {
-    id: string;
-    name: string;
-    memberCode: string;
-    phone: string;
-    status: string;
-    position: string | null;
-    joiningPaymentStatus: string | null;
-    generatedAmount: number;
-    walletBalance: number;
-    createdAt: string;
-  }[];
-  weeklyPayouts: {
-    id: string;
-    weekStart: string;
-    weekEnd: string;
-    generatedAmount: number;
-    downlineTotal: number;
-    status: string;
-    adminNote: string | null;
-  }[];
+  weeklyPayouts: { status: string }[];
 };
+
+type Wallet = { balance: number };
 
 export default function DashboardPage() {
   return (
@@ -113,19 +76,6 @@ export default function DashboardPage() {
 function DashboardInner() {
   const { member, refresh } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [tree, setTree] = useState<{
-    tree: TreeNode;
-    viewerId?: string;
-    focusId?: string;
-    volume: {
-      leftCount: number;
-      rightCount: number;
-      carryLeft: number;
-      carryRight: number;
-      pairsMatched: number;
-      payout: number;
-    };
-  } | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -135,7 +85,6 @@ function DashboardInner() {
   const [orderQty, setOrderQty] = useState(1);
   const [productId, setProductId] = useState<string>("");
   const [orderRef, setOrderRef] = useState("");
-  const [ledgerType, setLedgerType] = useState("ALL");
   const [joiningAmount, setJoiningAmount] = useState(999);
   const [companyBank, setCompanyBank] = useState<CompanyBank | null>(null);
   const [bankForm, setBankForm] = useState({
@@ -145,17 +94,6 @@ function DashboardInner() {
     ifsc: "",
     upiId: "",
   });
-
-  async function loadTree(focusId?: string) {
-    const path = focusId ? `/member/tree?focus=${encodeURIComponent(focusId)}` : "/member/tree";
-    const t = await api<{
-      tree: TreeNode;
-      viewerId?: string;
-      focusId?: string;
-      volume: never;
-    }>(path);
-    setTree(t as never);
-  }
 
   async function load() {
     try {
@@ -176,7 +114,6 @@ function DashboardInner() {
       setJoiningAmount(plan.joiningAmount);
       setTeam(teamData);
       setCompanyBank(status.collectionBank);
-      await loadTree();
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load dashboard");
@@ -199,12 +136,6 @@ function DashboardInner() {
     });
   }, [member]);
 
-  const filteredLedger = useMemo(() => {
-    if (!wallet) return [];
-    if (ledgerType === "ALL") return wallet.ledger;
-    return wallet.ledger.filter((row) => row.type === ledgerType);
-  }, [wallet, ledgerType]);
-
   const pendingJoining = payments.find((p) => p.purpose === "JOINING" && p.status === "PENDING");
   const selectedProduct = products.find((p) => p.id === productId);
 
@@ -213,11 +144,7 @@ function DashboardInner() {
     try {
       await api("/payments/submit", {
         method: "POST",
-        body: {
-          purpose: "JOINING",
-          amount: joiningAmount,
-          referenceNo: joiningRef,
-        },
+        body: { purpose: "JOINING", amount: joiningAmount, referenceNo: joiningRef },
       });
       toast.success("Joining payment submitted for review");
       setJoiningRef("");
@@ -254,7 +181,7 @@ function DashboardInner() {
   if (error) {
     return <p className="px-4 py-16 text-center text-destructive">{error}</p>;
   }
-  if (!member || !wallet || !tree || !team) {
+  if (!member || !wallet || !team) {
     return <p className="px-4 py-16 text-center text-muted-foreground">Loading dashboard…</p>;
   }
 
@@ -280,12 +207,8 @@ function DashboardInner() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Registration is complete. Your tree position is reserved and shown as{" "}
-              <span className="font-medium text-red-700">Red</span>. Enter the PIN from admin on the activation page.
-              After admin approves, your status becomes{" "}
-              <span className="font-medium text-emerald-700">Green</span>.
+              Enter the PIN from admin on the activation page. After admin approves, your status becomes Green.
             </p>
-            <p className="text-sm font-medium">Member ID: {member.memberCode}</p>
             <Link href="/verify-pin" className={buttonVariants()}>
               Submit PIN for activation
             </Link>
@@ -300,9 +223,7 @@ function DashboardInner() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Your PIN is submitted. You stay <span className="font-medium text-red-700">Red</span> in the tree until
-              admin approves. You can still sponsor new members from your tree using the{" "}
-              <span className="font-medium text-foreground">+</span> slots below.
+              You stay Red in the tree until admin approves. You can still sponsor from Genealogy → Tree.
             </p>
             <Link href="/tree" className={buttonVariants({ variant: "outline" })}>
               Open tree
@@ -318,8 +239,7 @@ function DashboardInner() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Transfer {inr(joiningAmount)} to the company account below, then submit the bank UTR. You stay off
-              matching until admin confirms the money.
+              Transfer {inr(joiningAmount)} to the company account below, then submit the bank UTR.
             </p>
             {companyBank?.accountNumber ? (
               <div className="rounded-lg border bg-muted/40 p-3 text-sm">
@@ -328,13 +248,8 @@ function DashboardInner() {
                 </p>
                 <p className="font-mono">A/c {companyBank.accountNumber}</p>
                 <p className="font-mono">IFSC {companyBank.ifsc}</p>
-                {companyBank.upiId ? <p>UPI {companyBank.upiId}</p> : null}
               </div>
-            ) : (
-              <p className="text-sm text-destructive">
-                Company bank is not set yet. Ask admin to save it under Plan config.
-              </p>
-            )}
+            ) : null}
             {pendingJoining ? (
               <p>Reference {pendingJoining.referenceNo} is waiting for review.</p>
             ) : (
@@ -348,55 +263,20 @@ function DashboardInner() {
                 <Button type="submit">Submit {inr(joiningAmount)} payment</Button>
               </form>
             )}
-            {payments
-              .filter((p) => p.purpose === "JOINING" && p.status === "REJECTED")
-              .map((p) => (
-                <p key={p.id} className="text-sm text-destructive">
-                  Rejected: {p.adminNote}. Submit a new reference to try again.
-                </p>
-              ))}
-            <form
-              className="flex flex-col gap-3 sm:flex-row"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const code = String(new FormData(form).get("pinCode") ?? "");
-                try {
-                  await api("/pins/use", { method: "POST", body: { code } });
-                  toast.success("PIN used. Your ID is now active.");
-                  form.reset();
-                  await load();
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Could not use PIN");
-                }
-              }}
-            >
-              <Input name="pinCode" placeholder="Or activate with a PIN code" required />
-              <Button type="submit" variant="outline">
-                Use PIN
-              </Button>
-            </form>
           </CardContent>
         </Card>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Wallet</CardTitle>
+            <CardTitle>E Wallet</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{inr(wallet.balance)}</p>
-            <p className="text-sm text-muted-foreground">Available until weekly payout is approved</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Today&apos;s matching</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{tree.volume.pairsMatched} pairs</p>
-            <p className="text-sm text-muted-foreground">{inr(tree.volume.payout)} net credited today</p>
+            <Link href="/ewallet" className="mt-2 inline-block text-sm text-primary hover:underline">
+              View wallet
+            </Link>
           </CardContent>
         </Card>
         <Card>
@@ -405,29 +285,38 @@ function DashboardInner() {
           </CardHeader>
           <CardContent>
             <p className="font-mono text-2xl">{member.memberCode}</p>
-            <p className="text-sm text-muted-foreground">Share this ID so others can receive PIN transfers.</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Team under you</CardTitle>
+            <CardTitle>My Total Team</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{team.downlineCount}</p>
-            <p className="text-sm text-muted-foreground">
-              {team.downlineActive} active · {team.downlinePending} awaiting joining payment
-            </p>
+            <Link href="/genealogy/team" className="mt-2 inline-block text-sm text-primary hover:underline">
+              View team
+            </Link>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Generated this week</CardTitle>
+            <CardTitle>Balance income</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{inr(team.generatedThisWeek)}</p>
-            <p className="text-sm text-muted-foreground">
-              {team.weekStart} to {team.weekEnd} · lifetime {inr(team.lifetimeGenerated)}
-            </p>
+            <Link href="/income" className="mt-2 inline-block text-sm text-primary hover:underline">
+              View income
+            </Link>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Genealogy</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Link href="/tree" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Open tree
+            </Link>
           </CardContent>
         </Card>
         <Card>
@@ -435,156 +324,23 @@ function DashboardInner() {
             <CardTitle>Weekly payout</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold">
+            <p className="text-lg font-semibold">
               {team.weeklyPayouts[0]?.status.replaceAll("_", " ") ?? "Not generated"}
             </p>
-            <p className="text-sm text-muted-foreground">
-              Admin reviews each member report every week before releasing payment.
-            </p>
+            <Link href="/income/slip" className="mt-2 inline-block text-sm text-primary hover:underline">
+              Income slips
+            </Link>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pairing diagram</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PairingDiagram
-            tree={tree.tree}
-            volume={tree.volume}
-            viewerId={tree.viewerId ?? member.id}
-            focusId={tree.focusId}
-            onFocusMember={(id) => loadTree(id).catch((err) => toast.error(err.message))}
-            onResetFocus={() => loadTree().catch((err) => toast.error(err.message))}
-          />
-        </CardContent>
-      </Card>
-
-      <Tabs defaultValue="ledger">
+      <Tabs defaultValue="bank">
         <TabsList>
-          <TabsTrigger value="ledger">Transactions</TabsTrigger>
-          <TabsTrigger value="team">My team</TabsTrigger>
-          <TabsTrigger value="weekly">Weekly payouts</TabsTrigger>
           <TabsTrigger value="bank">My bank</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
         </TabsList>
-        <TabsContent value="ledger" className="space-y-4 pt-4">
-          <div className="max-w-xs">
-            <Select value={ledgerType} onValueChange={(v) => setLedgerType(String(v ?? "ALL"))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All types</SelectItem>
-                <SelectItem value="RETAIL_INCOME">Retail income</SelectItem>
-                <SelectItem value="WEEKLY_PAYOUT">Weekly payout</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {filteredLedger.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No ledger entries yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-muted-foreground">
-                  <tr>
-                    <th className="py-2">Date</th>
-                    <th>Type</th>
-                    <th>Net</th>
-                    <th>GST / Admin</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLedger.map((row) => (
-                    <tr key={row.id} className="border-t">
-                      <td className="py-2">{formatDate(row.createdAt)}</td>
-                      <td>{row.type.replaceAll("_", " ")}</td>
-                      <td>{inr(row.amount)}</td>
-                      <td>
-                        {row.gstCut != null
-                          ? `${inr(row.gstCut)} / ${inr(row.adminCut ?? 0)}`
-                          : "—"}
-                      </td>
-                      <td className="max-w-xs text-muted-foreground">{row.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="team" className="space-y-4 pt-4">
-          <p className="text-sm text-muted-foreground">
-            Everyone placed under you in the binary tree, with joining payment status and how much they have generated.
-          </p>
-          {team.downline.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No members under you yet. Share your sponsor code.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-muted-foreground">
-                  <tr>
-                    <th className="py-2">Member</th>
-                    <th>Leg</th>
-                    <th>Joined date</th>
-                    <th>Account</th>
-                    <th>Joining payment</th>
-                    <th>Generated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {team.downline.map((row) => (
-                    <tr key={row.id} className="border-t">
-                      <td className="py-2">
-                        <p className="font-medium">{row.name}</p>
-                        <p className="text-muted-foreground">
-                          {row.memberCode} · {row.phone}
-                        </p>
-                      </td>
-                      <td>{row.position ?? "—"}</td>
-                      <td>{formatDate(row.createdAt)}</td>
-                      <td>
-                        <Badge variant={statusBadgeVariant(row.status)}>{statusLabel(row.status)}</Badge>
-                      </td>
-                      <td>{row.joiningPaymentStatus ?? "Not submitted"}</td>
-                      <td>{inr(row.generatedAmount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="weekly" className="space-y-4 pt-4">
-          {team.weeklyPayouts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No weekly reports yet. After matching runs, admin generates this week&apos;s payout reports and approves
-              them.
-            </p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {team.weeklyPayouts.map((row) => (
-                <li key={row.id} className="rounded-lg border p-3">
-                  <div className="flex justify-between gap-3">
-                    <span>
-                      {row.weekStart} → {row.weekEnd} · {inr(row.generatedAmount)} · {row.downlineTotal} in team
-                    </span>
-                    <Badge variant={row.status === "APPROVED" ? "default" : "secondary"}>{row.status}</Badge>
-                  </div>
-                  {row.adminNote ? <p className="text-muted-foreground">Admin: {row.adminNote}</p> : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </TabsContent>
         <TabsContent value="bank" className="space-y-4 pt-4">
-          <p className="text-sm text-muted-foreground">
-            Weekly payouts are transferred to this account after admin approval. Keep IFSC and account number
-            correct.
-          </p>
           <form
             className="grid max-w-xl gap-3"
             onSubmit={async (e) => {
@@ -639,12 +395,7 @@ function DashboardInner() {
               </div>
               <div className="space-y-2">
                 <Label>Qty</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={orderQty}
-                  onChange={(e) => setOrderQty(Number(e.target.value))}
-                />
+                <Input type="number" min={1} value={orderQty} onChange={(e) => setOrderQty(Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label>UTR</Label>
@@ -690,20 +441,12 @@ function DashboardInner() {
                     <Badge variant={p.status === "APPROVED" ? "default" : "secondary"}>{p.status}</Badge>
                   </div>
                   <p className="text-muted-foreground">UTR {p.referenceNo}</p>
-                  {p.adminNote ? <p>Admin: {p.adminNote}</p> : null}
                 </li>
               ))}
             </ul>
           )}
         </TabsContent>
       </Tabs>
-
-      <p className="text-sm text-muted-foreground">
-        Need the public catalog?{" "}
-        <Link href="/products" className={buttonVariants({ variant: "link" })}>
-          View products
-        </Link>
-      </p>
     </div>
   );
 }

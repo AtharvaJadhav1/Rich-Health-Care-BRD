@@ -6,26 +6,14 @@ import { toast } from "sonner";
 import { PageHero, PageShell } from "@/components/page-shell";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
-import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { api, uploadPhoto } from "@/lib/api";
-import { formatDate, inr } from "@/lib/money";
+import { formatDate } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-type Wallet = {
-  balance: number;
-  ledger: {
-    id: string;
-    type: string;
-    amount: number;
-    note: string | null;
-    createdAt: string;
-  }[];
-};
 
 type Me = {
   member: {
@@ -61,41 +49,14 @@ function Inner() {
   const { member, refresh } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [me, setMe] = useState<Me | null>(null);
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [tree, setTree] = useState<{
-    tree: TreeNode;
-    viewerId?: string;
-    focusId?: string;
-    volume: {
-      leftCount: number;
-      rightCount: number;
-      carryLeft: number;
-      carryRight: number;
-      pairsMatched: number;
-      payout: number;
-    };
-  } | null>(null);
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [uploading, setUploading] = useState(false);
 
-  async function loadTree(focusId?: string) {
-    const path = focusId ? `/member/tree?focus=${encodeURIComponent(focusId)}` : "/member/tree";
-    const t = await api<{
-      tree: TreeNode;
-      viewerId?: string;
-      focusId?: string;
-      volume: never;
-    }>(path);
-    setTree(t as never);
-  }
-
   async function load() {
-    const [profile, w] = await Promise.all([api<Me>("/member/me"), api<Wallet>("/member/wallet")]);
+    const profile = await api<Me>("/member/me");
     setMe(profile);
-    setWallet(w);
-    await loadTree();
     setAddress(profile.member.address ?? "");
     setCity(profile.member.city ?? "");
     setState(profile.member.state ?? "");
@@ -133,7 +94,7 @@ function Inner() {
     }
   }
 
-  if (!me || !wallet || !tree) {
+  if (!me) {
     return <p className="px-4 py-16 text-center text-muted-foreground">Loading profile…</p>;
   }
 
@@ -142,7 +103,7 @@ function Inner() {
 
   return (
     <PageShell width="6xl" className="space-y-6">
-      <PageHero title="Profile" description="Your distributor identity, photo, and account details." />
+      <PageHero title="My Profile" description="Your distributor identity, welcome letter, and account details." />
 
       <Card>
         <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
@@ -174,16 +135,9 @@ function Inner() {
               className="hidden"
               onChange={(e) => onPhotoSelected(e.target.files?.[0] ?? null)}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
-            >
+            <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? "Uploading…" : "Upload photo"}
             </Button>
-            <p className="text-center text-xs text-muted-foreground">JPG, PNG or WebP · max 2 MB</p>
           </div>
 
           <div className="min-w-0 flex-1 space-y-4">
@@ -194,7 +148,6 @@ function Inner() {
               </div>
               <Badge variant={m.kycStatus === "VERIFIED" ? "default" : "secondary"}>{m.kycStatus}</Badge>
             </div>
-
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
               <Detail label="Contact number" value={m.phone} />
               <Detail label="Joining date" value={formatDate(m.createdAt)} />
@@ -209,21 +162,49 @@ function Inner() {
                 label="Sponsor"
                 value={me.sponsor ? `${me.sponsor.name} (${me.sponsor.memberCode})` : "—"}
               />
-              {m.activatedAt ? (
-                <Detail label="Active since" value={formatDate(m.activatedAt)} />
-              ) : null}
+              {m.activatedAt ? <Detail label="Active since" value={formatDate(m.activatedAt)} /> : null}
             </dl>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="card">
+      <Tabs defaultValue="welcome">
         <TabsList>
+          <TabsTrigger value="welcome">Welcome Letter</TabsTrigger>
           <TabsTrigger value="card">ID Card</TabsTrigger>
-          <TabsTrigger value="genealogy">Genealogy</TabsTrigger>
-          <TabsTrigger value="wallet">E-Wallet</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
+        <TabsContent value="welcome" className="pt-4">
+          <Card className="mx-auto max-w-2xl print:shadow-none" id="welcome-letter">
+            <CardHeader className="border-b bg-primary/5 text-center">
+              <CardTitle>Welcome to Rich Health Care Ayurveda</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6 text-sm leading-relaxed">
+              <p>Dear {m.name},</p>
+              <p>
+                Welcome to Rich Health Care Ayurveda. Your distributor account has been created successfully. We are
+                delighted to have you join our Ayurvedic wellness network built on trust, herbal products, and binary
+                growth.
+              </p>
+              <p>
+                <span className="font-medium">Member ID:</span> {m.memberCode}
+                <br />
+                <span className="font-medium">Joined:</span> {formatDate(m.createdAt)}
+                <br />
+                <span className="font-medium">Sponsor:</span>{" "}
+                {me.sponsor ? `${me.sponsor.name} (${me.sponsor.memberCode})` : "—"}
+              </p>
+              <p>
+                Submit your PIN for admin approval to turn Green, build your left and right team from the Genealogy tree,
+                and grow your income through matching and retail.
+              </p>
+              <p className="font-medium">Rich Health Care Ayurveda · Padgha, Bhiwandi</p>
+            </CardContent>
+          </Card>
+          <Button className="mt-4 print:hidden" variant="outline" onClick={() => window.print()}>
+            Print welcome letter
+          </Button>
+        </TabsContent>
         <TabsContent value="card" className="pt-4">
           <Card className="mx-auto max-w-lg print:shadow-none" id="id-card">
             <CardHeader className="border-b bg-primary/5">
@@ -252,56 +233,12 @@ function Inner() {
             Print ID card
           </Button>
         </TabsContent>
-        <TabsContent value="genealogy" className="pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Genealogy</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PairingDiagram
-                tree={tree.tree}
-                volume={tree.volume}
-                viewerId={tree.viewerId ?? member?.id}
-                focusId={tree.focusId}
-                onFocusMember={(id) => loadTree(id).catch((err) => toast.error(err.message))}
-                onResetFocus={() => loadTree().catch((err) => toast.error(err.message))}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="wallet" className="pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>E-Wallet {inr(wallet.balance)}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {wallet.ledger.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No ledger entries yet.</p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {wallet.ledger.map((row) => (
-                    <li key={row.id} className="flex justify-between gap-4 border-b py-2">
-                      <span>
-                        {row.type.replaceAll("_", " ")}
-                        <span className="block text-muted-foreground">{formatDate(row.createdAt)}</span>
-                      </span>
-                      <span>{inr(row.amount)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
         <TabsContent value="details" className="pt-4">
           <Card>
             <CardHeader>
               <CardTitle>Update address</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Contact number and PAN are set at registration. Upload your photo using the button above.
-              </p>
               <form className="grid max-w-xl gap-3" onSubmit={save}>
                 <div className="space-y-2">
                   <Label>Locality / village (At)</Label>

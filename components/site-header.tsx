@@ -2,19 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { homeHref } from "@/components/home-redirect";
+import { MemberMenu } from "@/components/member-menu";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { isStaffRole } from "@/lib/member-status";
 
@@ -26,24 +20,10 @@ const publicLinks = [
   { href: "/contact", label: "Contact" },
 ];
 
-const appLinks = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/kyc", label: "KYC" },
-  { href: "/profile", label: "Profile" },
-  { href: "/tree", label: "Tree" },
+const staffLinks = [
+  { href: "/admin", label: "Admin" },
+  { href: "/admin/members", label: "Members" },
 ];
-
-const memberPinLinks = [
-  { href: "/pins/transfer", label: "Pin Transfer" },
-  { href: "/pins/used", label: "Pin Used" },
-  { href: "/pins/unused", label: "Pin Unused" },
-];
-
-function kycBadge(status?: string) {
-  if (status === "VERIFIED") return "Verified";
-  if (status === "REJECTED") return "Rejected";
-  return "Pending";
-}
 
 export function SiteHeader() {
   const { member, logout } = useAuth();
@@ -57,22 +37,14 @@ export function SiteHeader() {
     pathname.startsWith("/pins") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/tree") ||
+    pathname.startsWith("/genealogy") ||
+    pathname.startsWith("/ewallet") ||
+    pathname.startsWith("/income") ||
+    pathname.startsWith("/support") ||
     pathname.startsWith("/verify-pin");
-
-  const navLinks = member
-    ? [
-        ...appLinks,
-        ...(isStaffRole(member.role) ? [{ href: "/admin", label: "Admin" }] : []),
-      ]
-    : publicLinks;
 
   function closeMenu() {
     setMenuOpen(false);
-  }
-
-  function navigate(href: string) {
-    closeMenu();
-    router.push(href);
   }
 
   return (
@@ -91,19 +63,34 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={
-                pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
-                  ? "nav-link-active"
-                  : "nav-link"
-              }
-            >
-              {link.label}
-            </Link>
-          ))}
+          {!member
+            ? publicLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={pathname === link.href ? "nav-link-active" : "nav-link"}
+                >
+                  {link.label}
+                </Link>
+              ))
+            : member.role === "MEMBER"
+              ? (
+                  <Link
+                    href="/dashboard"
+                    className={pathname.startsWith("/dashboard") ? "nav-link-active" : "nav-link"}
+                  >
+                    Dashboard
+                  </Link>
+                )
+              : staffLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={pathname.startsWith(link.href) ? "nav-link-active" : "nav-link"}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -122,46 +109,42 @@ export function SiteHeader() {
             <SheetTrigger render={<Button variant="ghost" size="icon" className="size-10" />}>
               <Menu className="size-5" />
             </SheetTrigger>
-            <SheetContent className="flex flex-col gap-1 p-6">
-              <p className="section-eyebrow mb-4">Menu</p>
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={closeMenu}
-                  className={cn(
-                    "rounded-lg px-3 py-2.5 text-base transition-colors",
-                    pathname === link.href ||
-                      (link.href !== "/" && pathname.startsWith(link.href))
-                      ? "bg-primary/10 font-medium text-primary"
-                      : "text-foreground hover:bg-muted",
-                  )}
-                >
-                  {link.label}
-                  {link.href === "/kyc" && member ? (
-                    <Badge
-                      variant={member.kycStatus === "VERIFIED" ? "default" : "secondary"}
-                      className="ml-2 h-5 px-1.5 text-[10px]"
-                    >
-                      {kycBadge(member.kycStatus)}
-                    </Badge>
-                  ) : null}
-                </Link>
-              ))}
+            <SheetContent className="flex flex-col gap-1 overflow-y-auto p-6">
+              <p className="section-eyebrow mb-2">Menu</p>
               {member && member.role === "MEMBER" ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-lg px-3 py-2.5 text-base hover:bg-muted">
-                    PIN <ChevronDown className="size-3.5" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {memberPinLinks.map((link) => (
-                      <DropdownMenuItem key={link.href} onClick={() => navigate(link.href)}>
-                        {link.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
+                <MemberMenu onNavigate={closeMenu} />
+              ) : member && isStaffRole(member.role) ? (
+                <div className="space-y-1">
+                  {staffLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={closeMenu}
+                      className={cn(
+                        "block rounded-lg px-3 py-2.5 text-base transition-colors",
+                        pathname.startsWith(link.href)
+                          ? "bg-primary/10 font-medium text-primary"
+                          : "text-foreground hover:bg-muted",
+                      )}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {publicLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={closeMenu}
+                      className="block rounded-lg px-3 py-2.5 text-base hover:bg-muted"
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
               <div className="mt-auto flex flex-col gap-2 pt-6">
                 {member ? (
                   <Button
