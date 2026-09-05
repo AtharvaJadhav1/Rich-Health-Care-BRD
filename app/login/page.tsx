@@ -48,20 +48,23 @@ export default function LoginPage() {
     <PageShell narrow>
       <PageHero
         title="Login"
-        description="Use the Member ID and password issued at registration. Passwords are case-sensitive."
+        description="Use your Member ID or 10-digit mobile number and password. Passwords are case-sensitive."
       />
       <Card>
         <CardHeader>
-          <CardTitle>Member ID and password</CardTitle>
+          <CardTitle>Member ID or mobile</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="memberCode">Member ID</Label>
+              <Label htmlFor="memberCode">Member ID or mobile</Label>
               <Input
                 id="memberCode"
                 value={memberCode}
-                onChange={(e) => setMemberCode(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setMemberCode(/^\d*$/.test(next) ? next : next.toUpperCase());
+                }}
                 autoComplete="username"
                 required
               />

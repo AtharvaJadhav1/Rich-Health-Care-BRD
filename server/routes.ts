@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { FastifyInstance } from "fastify";
 import { prisma } from "./db";
-import { requireAuth, signToken } from "./auth";
+import { MAX_ACCOUNTS_PER_PHONE, requireAuth, resolveLoginMember, signToken, countMembersByPhone } from "./auth";
 import { requireAdmin, requireStaff } from "./staff";
 import { isActiveMemberStatus } from "./member-status";
 import { utcDateKey } from "./dates";
@@ -206,9 +206,11 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!isValidPan(panNumber)) {
       return reply.code(400).send({ error: "Enter a valid PAN (e.g. ABCDE1234F)." });
     }
-    const existing = await prisma.member.findUnique({ where: { phone } });
-    if (existing) {
-      return reply.code(409).send({ error: "This mobile number is already registered." });
+    const existingPhoneCount = await countMembersByPhone(phone);
+    if (existingPhoneCount >= MAX_ACCOUNTS_PER_PHONE) {
+      return reply.code(409).send({
+        error: `This mobile number is already used on ${MAX_ACCOUNTS_PER_PHONE} accounts.`,
+      });
     }
     const panTaken = await prisma.member.findFirst({ where: { panNumber } });
     if (panTaken) {
@@ -285,12 +287,8 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!loginId) {
       return reply.code(400).send({ error: "Enter Member ID or phone, and password." });
     }
-    const member = await prisma.member.findFirst({
-      where: {
-        OR: [{ memberCode: loginId.toUpperCase() }, { phone: loginId }],
-      },
-    });
-    if (!member || !(await bcrypt.compare(parsed.data.password, member.password))) {
+    const member = await resolveLoginMember(loginId, parsed.data.password);
+    if (!member) {
       return reply.code(401).send({ error: "Incorrect Member ID or password." });
     }
     if (member.status === "BLOCKED") {

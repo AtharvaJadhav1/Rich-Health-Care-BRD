@@ -1,6 +1,9 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import { prisma } from "./db";
+
+export const MAX_ACCOUNTS_PER_PHONE = 3;
 
 export type AuthUser = {
   id: string;
@@ -63,4 +66,23 @@ export async function requireRole(
     return null;
   }
   return member;
+}
+
+export async function countMembersByPhone(phone: string) {
+  return prisma.member.count({ where: { phone } });
+}
+
+export async function resolveLoginMember(loginId: string, password: string) {
+  const trimmed = loginId.trim();
+  if (!trimmed) return null;
+
+  const isPhone = /^[0-9]{10}$/.test(trimmed);
+  const candidates = isPhone
+    ? await prisma.member.findMany({ where: { phone: trimmed } })
+    : await prisma.member.findMany({ where: { memberCode: trimmed.toUpperCase() } });
+
+  for (const candidate of candidates) {
+    if (await bcrypt.compare(password, candidate.password)) return candidate;
+  }
+  return null;
 }

@@ -10,7 +10,7 @@ datasource db {
 model Member {
   id             String             @id @default(cuid())
   name           String
-  phone          String             @unique
+  phone          String
   password       String
   memberCode     String             @unique
   panNumber      String
@@ -46,6 +46,7 @@ model Member {
   weeklyPayouts  WeeklyPayout[]
   createdAt      DateTime           @default(now())
 
+  @@index([phone])
   @@unique([parentId, position], map: "Member_binary_slot")
 }
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, Menu } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { homeHref } from "@/components/home-redirect";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -25,6 +26,13 @@ const publicLinks = [
   { href: "/contact", label: "Contact" },
 ];
 
+const appLinks = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/kyc", label: "KYC" },
+  { href: "/profile", label: "Profile" },
+  { href: "/tree", label: "Tree" },
+];
+
 const memberPinLinks = [
   { href: "/pins/transfer", label: "Pin Transfer" },
   { href: "/pins/used", label: "Pin Used" },
@@ -41,6 +49,7 @@ export function SiteHeader() {
   const { member, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
   const isApp =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/admin") ||
@@ -50,16 +59,21 @@ export function SiteHeader() {
     pathname.startsWith("/tree") ||
     pathname.startsWith("/verify-pin");
 
-  const memberLinks = member
+  const navLinks = member
     ? [
-        ...publicLinks,
-        { href: "/dashboard", label: "Dashboard" },
-        { href: "/kyc", label: "KYC" },
-        { href: "/profile", label: "Profile" },
-        { href: "/tree", label: "Tree" },
+        ...appLinks,
         ...(isStaffRole(member.role) ? [{ href: "/admin", label: "Admin" }] : []),
       ]
     : publicLinks;
+
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
+  function navigate(href: string) {
+    closeMenu();
+    router.push(href);
+  }
 
   return (
     <header className="glass-header sticky top-0 z-40">
@@ -77,11 +91,15 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex">
-          {memberLinks.slice(0, publicLinks.length).map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={pathname === link.href ? "nav-link-active" : "nav-link"}
+              className={
+                pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
+                  ? "nav-link-active"
+                  : "nav-link"
+              }
             >
               {link.label}
             </Link>
@@ -98,31 +116,23 @@ export function SiteHeader() {
                 Register
               </Link>
             </div>
-          ) : (
-            <Link
-              href="/dashboard"
-              className={cn(
-                "hidden rounded-full px-3 py-1.5 text-sm font-medium sm:inline-flex",
-                pathname.startsWith("/dashboard") ? "nav-link-active" : "nav-link",
-              )}
-            >
-              Dashboard
-            </Link>
-          )}
+          ) : null}
 
-          <Sheet>
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger render={<Button variant="ghost" size="icon" className="size-10" />}>
               <Menu className="size-5" />
             </SheetTrigger>
             <SheetContent className="flex flex-col gap-1 p-6">
               <p className="section-eyebrow mb-4">Menu</p>
-              {memberLinks.map((link) => (
+              {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={closeMenu}
                   className={cn(
                     "rounded-lg px-3 py-2.5 text-base transition-colors",
-                    pathname === link.href
+                    pathname === link.href ||
+                      (link.href !== "/" && pathname.startsWith(link.href))
                       ? "bg-primary/10 font-medium text-primary"
                       : "text-foreground hover:bg-muted",
                   )}
@@ -145,7 +155,7 @@ export function SiteHeader() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     {memberPinLinks.map((link) => (
-                      <DropdownMenuItem key={link.href} onClick={() => router.push(link.href)}>
+                      <DropdownMenuItem key={link.href} onClick={() => navigate(link.href)}>
                         {link.label}
                       </DropdownMenuItem>
                     ))}
@@ -156,6 +166,7 @@ export function SiteHeader() {
                 {member ? (
                   <Button
                     onClick={() => {
+                      closeMenu();
                       logout();
                       router.push("/");
                     }}
@@ -164,10 +175,14 @@ export function SiteHeader() {
                   </Button>
                 ) : (
                   <>
-                    <Link href="/login" className={buttonVariants({ variant: "outline" })}>
+                    <Link href="/login" onClick={closeMenu} className={buttonVariants({ variant: "outline" })}>
                       Login
                     </Link>
-                    <Link href={isApp ? "/login" : "/register"} className={buttonVariants()}>
+                    <Link
+                      href={isApp ? "/login" : "/register"}
+                      onClick={closeMenu}
+                      className={buttonVariants()}
+                    >
                       Register
                     </Link>
                   </>
