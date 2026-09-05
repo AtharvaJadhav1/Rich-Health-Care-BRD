@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { treeStatusColor, treeStatusLabel } from "@/lib/member-status";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ export type TreeNode = {
 };
 
 const MAX_DEPTH = 10;
+const TREE_VIEWPORT_HEIGHT = 400;
 
 function registerHref(sponsorCode: string, placementCode: string, position: "LEFT" | "RIGHT") {
   const params = new URLSearchParams({
@@ -60,7 +61,7 @@ function MemberCard({
 }) {
   const color = treeStatusColor(node.status);
   const className = cn(
-    "relative z-10 flex w-[148px] flex-col items-center rounded-xl border bg-card px-3 py-3 text-center shadow-sm transition-shadow hover:shadow-md",
+    "relative z-10 flex w-[118px] shrink-0 flex-col items-center rounded-xl border bg-card px-2.5 py-2.5 text-center shadow-sm transition-shadow hover:shadow-md",
     isRoot && "border-primary ring-2 ring-primary/20",
     isViewer && "ring-2 ring-primary/40",
     side === "LEFT" && "border-l-4 border-l-sky-500/70",
@@ -130,7 +131,7 @@ function EmptySlot({
     <Link
       href={href}
       className={cn(
-        "group relative z-10 flex h-[88px] w-[148px] flex-col items-center justify-center rounded-xl border-2 border-dashed bg-muted/20 text-center transition-colors hover:border-primary hover:bg-primary/5",
+        "group relative z-10 flex h-[72px] w-[118px] shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed bg-muted/20 text-center transition-colors hover:border-primary hover:bg-primary/5",
         position === "LEFT" ? "border-sky-400/50 hover:border-sky-600" : "border-amber-400/50 hover:border-amber-600",
       )}
       title={`Register a new member on the ${position === "LEFT" ? "left" : "right"} side`}
@@ -157,7 +158,7 @@ function BranchConnectors() {
 
   return (
     <svg
-      className="pointer-events-none mx-auto h-12 w-full min-w-[12rem] text-primary/55"
+      className="pointer-events-none mx-auto h-8 w-full min-w-[9rem] text-primary/55"
       viewBox="0 0 320 48"
       preserveAspectRatio="none"
       aria-hidden
@@ -217,9 +218,14 @@ function TreeBranch({
         onFocus={canFocus ? () => onFocusMember!(node.id) : undefined}
       />
       {showChildren ? (
-        <div className="flex w-full min-w-[18rem] flex-col items-center sm:min-w-[22rem]">
+        <div className="flex w-full min-w-[16rem] flex-col items-center sm:min-w-[18rem]">
           <BranchConnectors />
-          <div className="grid w-full grid-cols-2 gap-3 sm:gap-6 md:gap-10">
+          <div
+            className={cn(
+              "grid w-full grid-cols-2",
+              depth === 0 ? "gap-2 sm:gap-3" : depth === 1 ? "gap-1.5 sm:gap-2" : "gap-1",
+            )}
+          >
             <div className="flex flex-col items-center">
               {node.left ? (
                 <TreeBranch
@@ -255,6 +261,52 @@ function TreeBranch({
   );
 }
 
+function TreeScaleViewport({ children }: { children: React.ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    function fit() {
+      const box = boxRef.current;
+      const content = contentRef.current;
+      if (!box || !content) return;
+      const padding = 24;
+      const availW = Math.max(box.clientWidth - padding, 1);
+      const availH = Math.max(box.clientHeight - padding, 1);
+      const needW = content.scrollWidth;
+      const needH = content.scrollHeight;
+      if (needW <= 0 || needH <= 0) return;
+      const next = Math.min(1, availW / needW, availH / needH);
+      setScale(Math.max(0.45, next));
+    }
+
+    fit();
+    const observer = new ResizeObserver(fit);
+    if (boxRef.current) observer.observe(boxRef.current);
+    if (contentRef.current) observer.observe(contentRef.current);
+    return () => observer.disconnect();
+  }, [children]);
+
+  return (
+    <div
+      ref={boxRef}
+      className="w-full overflow-auto rounded-xl border bg-gradient-to-b from-muted/30 to-background p-3 sm:p-4"
+      style={{ height: TREE_VIEWPORT_HEIGHT }}
+    >
+      <div className="flex min-h-full min-w-full items-start justify-center">
+        <div
+          ref={contentRef}
+          className="px-2"
+          style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PairingDiagram({
   tree,
   volume,
@@ -262,6 +314,7 @@ export function PairingDiagram({
   focusId,
   onFocusMember,
   onResetFocus,
+  variant = "full",
 }: {
   tree: TreeNode;
   volume: {
@@ -276,6 +329,7 @@ export function PairingDiagram({
   focusId?: string;
   onFocusMember?: (memberId: string) => void;
   onResetFocus?: () => void;
+  variant?: "full" | "tree-only";
 }) {
   const { member } = useAuth();
   const sponsorCode = member?.memberCode ?? tree.memberCode;
@@ -283,9 +337,10 @@ export function PairingDiagram({
 
   const leftCarry = volume.carryLeft + volume.leftCount - volume.pairsMatched;
   const rightCarry = volume.carryRight + volume.rightCount - volume.pairsMatched;
+  const treeOnly = variant === "tree-only";
 
   return (
-    <div className="space-y-6">
+    <div className={treeOnly ? "space-y-3" : "space-y-6"}>
       {showReset ? (
         <div className="flex justify-center">
           <button
@@ -297,58 +352,62 @@ export function PairingDiagram({
           </button>
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Today's matched pairs" value={String(volume.pairsMatched)} hint="Capped at 10 / day" />
-        <Stat
-          label="Left leg (carry-forward)"
-          value={String(leftCarry)}
-          hint={`${volume.leftCount} new today · ${volume.carryLeft} carried`}
-        />
-        <Stat
-          label="Right leg (carry-forward)"
-          value={String(rightCarry)}
-          hint={`${volume.rightCount} new today · ${volume.carryRight} carried`}
-        />
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        Showing <span className="font-medium text-foreground">{tree.memberCode}</span> and downline only. Tap a member
-        below to view their leg, or tap <span className="font-medium text-foreground">+</span> on an open slot to
-        register.
-      </p>
-
-      <div className="overflow-x-auto rounded-xl border bg-gradient-to-b from-muted/30 to-background p-4 sm:p-8">
-        <div className="mx-auto w-max min-w-full px-2">
-          <TreeBranch
-            node={tree}
-            depth={0}
-            sponsorCode={sponsorCode}
-            viewerId={viewerId}
-            onFocusMember={onFocusMember}
+      {!treeOnly ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Today's matched pairs" value={String(volume.pairsMatched)} hint="Capped at 10 / day" />
+          <Stat
+            label="Left leg (carry-forward)"
+            value={String(leftCarry)}
+            hint={`${volume.leftCount} new today · ${volume.carryLeft} carried`}
+          />
+          <Stat
+            label="Right leg (carry-forward)"
+            value={String(rightCarry)}
+            hint={`${volume.rightCount} new today · ${volume.carryRight} carried`}
           />
         </div>
-      </div>
+      ) : null}
 
-      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-3 rounded-full bg-emerald-500" /> Green — activated
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-3 rounded-full bg-red-500" /> Red — awaiting admin PIN
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-3 rounded-sm border-l-4 border-l-sky-500 bg-card" /> Left leg
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-3 rounded-sm border-r-4 border-r-amber-500 bg-card" /> Right leg
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="flex size-4 items-center justify-center rounded border border-dashed">
-            <Plus className="size-2.5" />
+      {!treeOnly ? (
+        <p className="text-center text-xs text-muted-foreground">
+          Showing <span className="font-medium text-foreground">{tree.memberCode}</span> and downline only. Tap a member
+          below to view their leg, or tap <span className="font-medium text-foreground">+</span> on an open slot to
+          register.
+        </p>
+      ) : null}
+
+      <TreeScaleViewport>
+        <TreeBranch
+          node={tree}
+          depth={0}
+          sponsorCode={sponsorCode}
+          viewerId={viewerId}
+          onFocusMember={onFocusMember}
+        />
+      </TreeScaleViewport>
+
+      {!treeOnly ? (
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-3 rounded-full bg-emerald-500" /> Green — activated
           </span>
-          Open slot → Register
-        </span>
-      </div>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-3 rounded-full bg-red-500" /> Red — awaiting admin PIN
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-3 rounded-sm border-l-4 border-l-sky-500 bg-card" /> Left leg
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-3 rounded-sm border-r-4 border-r-amber-500 bg-card" /> Right leg
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex size-4 items-center justify-center rounded border border-dashed">
+              <Plus className="size-2.5" />
+            </span>
+            Open slot → Register
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

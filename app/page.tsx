@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { Leaf, ShieldCheck, Users } from "lucide-react";
 import { ProductSlideshow } from "@/components/product-slideshow";
+import { HomeRedirect } from "@/components/home-redirect";
 import { FeatureCard, FeatureGrid, PageShell } from "@/components/page-shell";
 import { buttonVariants } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
     <PageShell width="6xl" className="space-y-10 sm:space-y-14">
+      <HomeRedirect />
       <section className="hero-gradient">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

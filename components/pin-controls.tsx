@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
-import { formatDate, inr } from "@/lib/money";
+import { formatDate } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,40 +29,19 @@ export type PinRow = {
   transferredFrom?: { memberCode: string; name: string; at: string } | null;
 };
 
-type Payment = {
-  id: string;
-  purpose: string;
-  amount: number;
-  referenceNo: string;
-  status: string;
-  adminNote: string | null;
-};
 
-export function PinControls({
-  joiningAmount,
-  onChanged,
-}: {
-  joiningAmount: number;
-  onChanged?: () => void;
-}) {
+export function PinControls({ onChanged }: { onChanged?: () => void }) {
   const { member } = useAuth();
   const [unused, setUnused] = useState<PinRow[]>([]);
   const [used, setUsed] = useState<PinRow[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [refNo, setRefNo] = useState("");
   const [transferId, setTransferId] = useState("");
   const [recipient, setRecipient] = useState("");
   const [useCode, setUseCode] = useState("");
 
   async function load() {
-    const [u, d, p] = await Promise.all([
-      api<PinRow[]>("/pins/unused"),
-      api<PinRow[]>("/pins/used"),
-      api<Payment[]>("/member/payments"),
-    ]);
+    const [u, d] = await Promise.all([api<PinRow[]>("/pins/unused"), api<PinRow[]>("/pins/used")]);
     setUnused(u);
     setUsed(d);
-    setPayments(p.filter((row) => row.purpose === "PIN"));
     if (!transferId && u[0]) setTransferId(u[0].id);
   }
 
@@ -70,19 +49,6 @@ export function PinControls({
     load().catch((err) => toast.error(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function requestPin(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await api("/pins/generate", { method: "POST", body: { referenceNo: refNo } });
-      toast.success("PIN request sent to admin");
-      setRefNo("");
-      await load();
-      onChanged?.();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not request PIN");
-    }
-  }
 
   async function transfer(e: FormEvent) {
     e.preventDefault();
@@ -113,40 +79,8 @@ export function PinControls({
     }
   }
 
-  const pending = payments.find((p) => p.status === "PENDING");
-
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Pin Generate</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Submit {inr(joiningAmount)} UTR. Admin generates the PIN and it appears in Unused.
-          </p>
-          {pending ? (
-            <p className="text-sm">Request {pending.referenceNo} is waiting for admin.</p>
-          ) : (
-            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={requestPin}>
-              <Input
-                placeholder="UTR / reference"
-                value={refNo}
-                onChange={(e) => setRefNo(e.target.value)}
-                required
-              />
-              <Button type="submit">Request PIN</Button>
-            </form>
-          )}
-          {payments
-            .filter((p) => p.status === "REJECTED")
-            .map((p) => (
-              <p key={p.id} className="text-sm text-destructive">
-                Rejected: {p.adminNote}
-              </p>
-            ))}
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Pin Transfer</CardTitle>

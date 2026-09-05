@@ -699,6 +699,9 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post("/pins/generate", async (request, reply) => {
     const member = await requireAuth(request, reply);
     if (!member) return;
+    if (member.role !== "ADMIN") {
+      return reply.code(403).send({ error: "PIN generation is handled by admin only." });
+    }
     const body = z
       .object({
         referenceNo: z.string().min(4),

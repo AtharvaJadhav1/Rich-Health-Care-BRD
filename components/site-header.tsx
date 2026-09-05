@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, Menu } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { homeHref } from "@/components/home-redirect";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -24,8 +25,7 @@ const publicLinks = [
   { href: "/contact", label: "Contact" },
 ];
 
-const pinLinks = [
-  { href: "/pins/generate", label: "Pin Generate" },
+const memberPinLinks = [
   { href: "/pins/transfer", label: "Pin Transfer" },
   { href: "/pins/used", label: "Pin Used" },
   { href: "/pins/unused", label: "Pin Unused" },
@@ -64,7 +64,7 @@ export function SiteHeader() {
   return (
     <header className="glass-header sticky top-0 z-40">
       <div className="mx-auto flex h-[4.75rem] w-full max-w-6xl items-center justify-between gap-3 px-4 sm:h-[5.25rem] sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-3">
+        <Link href={homeHref(member)} className="flex shrink-0 items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.jpg"
@@ -138,13 +138,13 @@ export function SiteHeader() {
                   ) : null}
                 </Link>
               ))}
-              {member && (member.role === "MEMBER" || member.role === "ADMIN") ? (
+              {member && member.role === "MEMBER" ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-lg px-3 py-2.5 text-base hover:bg-muted">
                     PIN <ChevronDown className="size-3.5" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    {pinLinks.map((link) => (
+                    {memberPinLinks.map((link) => (
                       <DropdownMenuItem key={link.href} onClick={() => router.push(link.href)}>
                         {link.label}
                       </DropdownMenuItem>
