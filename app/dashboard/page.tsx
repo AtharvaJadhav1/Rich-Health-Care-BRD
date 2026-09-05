@@ -89,6 +89,7 @@ type TeamSummary = {
     joiningPaymentStatus: string | null;
     generatedAmount: number;
     walletBalance: number;
+    createdAt: string;
   }[];
   weeklyPayouts: {
     id: string;
@@ -512,6 +513,7 @@ function DashboardInner() {
                   <tr>
                     <th className="py-2">Member</th>
                     <th>Leg</th>
+                    <th>Joined date</th>
                     <th>Account</th>
                     <th>Joining payment</th>
                     <th>Generated</th>
@@ -527,6 +529,7 @@ function DashboardInner() {
                         </p>
                       </td>
                       <td>{row.position ?? "—"}</td>
+                      <td>{formatDate(row.createdAt)}</td>
                       <td>
                         <Badge variant={statusBadgeVariant(row.status)}>{statusLabel(row.status)}</Badge>
                       </td>
