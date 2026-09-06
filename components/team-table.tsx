@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, inr } from "@/lib/money";
 import { statusBadgeVariant, statusLabel } from "@/lib/member-status";
@@ -40,9 +41,18 @@ export function TeamTable({ team }: { team: TeamSummary }) {
           {team.downline.map((row) => (
             <tr key={row.id} className="border-t">
               <td className="py-2">
-                <p className="font-medium">{row.name}</p>
+                <Link
+                  href={`/tree?focus=${encodeURIComponent(row.id)}`}
+                  className="font-medium text-foreground hover:text-primary hover:underline"
+                >
+                  {row.name}
+                </Link>
                 <p className="text-muted-foreground">
-                  {row.memberCode} · {row.phone}
+                  <Link href={`/tree?focus=${encodeURIComponent(row.id)}`} className="hover:text-primary hover:underline">
+                    {row.memberCode}
+                  </Link>
+                  {" · "}
+                  {row.phone}
                 </p>
               </td>
               <td>{row.position ?? "—"}</td>

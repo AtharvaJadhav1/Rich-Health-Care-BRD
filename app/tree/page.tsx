@@ -1,48 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { RequireAuth } from "@/components/require-auth";
 import { PairingDiagram, TreeNode } from "@/components/pairing-diagram";
 import { api } from "@/lib/api";
 
+type TreePayload = {
+  tree: TreeNode;
+  viewerId?: string;
+  focusId?: string;
+  volume: {
+    leftCount: number;
+    rightCount: number;
+    carryLeft: number;
+    carryRight: number;
+    pairsMatched: number;
+    payout: number;
+  };
+};
+
 export default function TreePage() {
   return (
     <RequireAuth>
-      <Inner />
+      <Suspense fallback={<p className="px-4 py-16 text-center text-muted-foreground">Loading tree…</p>}>
+        <Inner />
+      </Suspense>
     </RequireAuth>
   );
 }
 
 function Inner() {
-  const [tree, setTree] = useState<{
-    tree: TreeNode;
-    viewerId?: string;
-    focusId?: string;
-    volume: {
-      leftCount: number;
-      rightCount: number;
-      carryLeft: number;
-      carryRight: number;
-      pairsMatched: number;
-      payout: number;
-    };
-  } | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusParam = searchParams.get("focus")?.trim() || undefined;
+  const [tree, setTree] = useState<TreePayload | null>(null);
 
-  async function loadTree(focusId?: string) {
+  const loadTree = useCallback(async (focusId?: string) => {
     const path = focusId ? `/member/tree?focus=${encodeURIComponent(focusId)}` : "/member/tree";
-    const t = await api<{
-      tree: TreeNode;
-      viewerId?: string;
-      focusId?: string;
-      volume: never;
-    }>(path);
-    setTree(t as never);
-  }
+    const data = await api<TreePayload>(path);
+    setTree(data);
+  }, []);
 
   useEffect(() => {
-    loadTree().catch((err) => toast.error(err.message));
-  }, []);
+    loadTree(focusParam).catch((err) => toast.error(err.message));
+  }, [focusParam, loadTree]);
+
+  function focusMember(id: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("focus", id);
+    router.push(`/tree?${next.toString()}`, { scroll: false });
+  }
+
+  function resetFocus() {
+    router.push("/tree", { scroll: false });
+  }
 
   if (!tree) {
     return <p className="px-4 py-16 text-center text-muted-foreground">Loading tree…</p>;
@@ -54,7 +67,8 @@ function Inner() {
         <p className="section-eyebrow">Genealogy</p>
         <h1 className="font-heading mt-1 text-2xl font-semibold sm:text-3xl">Binary tree</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your network — tap any member to explore their downline, or use + on empty slots to register.
+          Your network — tap any member to explore their downline, or use + on empty slots to register. Use your browser
+          back button to return to the previous tree view.
         </p>
       </div>
       <PairingDiagram
@@ -63,8 +77,8 @@ function Inner() {
         volume={tree.volume}
         viewerId={tree.viewerId}
         focusId={tree.focusId}
-        onFocusMember={(id) => loadTree(id).catch((err) => toast.error(err.message))}
-        onResetFocus={() => loadTree().catch((err) => toast.error(err.message))}
+        onFocusMember={focusMember}
+        onResetFocus={resetFocus}
       />
     </div>
   );

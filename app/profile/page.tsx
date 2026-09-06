@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHero, PageShell } from "@/components/page-shell";
 import { RequireAuth } from "@/components/require-auth";
@@ -40,12 +41,29 @@ function formatAddress(member: Me["member"]) {
 export default function ProfilePage() {
   return (
     <RequireAuth>
-      <Inner />
+      <Suspense fallback={<p className="px-4 py-16 text-center text-muted-foreground">Loading profile…</p>}>
+        <Inner />
+      </Suspense>
     </RequireAuth>
   );
 }
 
+const PROFILE_TABS = ["welcome", "card", "details"] as const;
+
 function Inner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab = PROFILE_TABS.includes(tabParam as (typeof PROFILE_TABS)[number])
+    ? (tabParam as (typeof PROFILE_TABS)[number])
+    : "welcome";
+
+  function setProfileTab(tab: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("tab", tab);
+    router.push(`/profile?${next.toString()}`, { scroll: false });
+  }
+
   const { member, refresh } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -168,7 +186,7 @@ function Inner() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="welcome">
+      <Tabs value={activeTab} onValueChange={setProfileTab}>
         <TabsList>
           <TabsTrigger value="welcome">Welcome Letter</TabsTrigger>
           <TabsTrigger value="card">ID Card</TabsTrigger>

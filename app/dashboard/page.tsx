@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { RequireAuth } from "@/components/require-auth";
 import { useAuth } from "@/components/auth-provider";
@@ -68,12 +69,29 @@ type Wallet = { balance: number };
 export default function DashboardPage() {
   return (
     <RequireAuth>
-      <DashboardInner />
+      <Suspense fallback={<p className="px-4 py-16 text-center text-muted-foreground">Loading dashboard…</p>}>
+        <DashboardInner />
+      </Suspense>
     </RequireAuth>
   );
 }
 
+const DASHBOARD_TABS = ["bank", "orders", "payments"] as const;
+
 function DashboardInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab = DASHBOARD_TABS.includes(tabParam as (typeof DASHBOARD_TABS)[number])
+    ? (tabParam as (typeof DASHBOARD_TABS)[number])
+    : "bank";
+
+  function setDashboardTab(tab: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("tab", tab);
+    router.push(`/dashboard?${next.toString()}`, { scroll: false });
+  }
+
   const { member, refresh } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -334,7 +352,7 @@ function DashboardInner() {
         </Card>
       </div>
 
-      <Tabs defaultValue="bank">
+      <Tabs value={activeTab} onValueChange={setDashboardTab}>
         <TabsList>
           <TabsTrigger value="bank">My bank</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
