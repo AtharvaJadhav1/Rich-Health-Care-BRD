@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Minus, Plus, RotateCcw, User } from "lucide-react";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Minus, Plus, RotateCcw, User } from "lucide-react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { treeStatusColor, treeStatusLabel } from "@/lib/member-status";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ export type TreeNode = {
 };
 
 const MAX_DEPTH = 10;
+const DEFAULT_VISIBLE_DEPTH = 2;
 const TREE_VIEWPORT_HEIGHT = 560;
 
 function registerHref(sponsorCode: string, placementCode: string, position: "LEFT" | "RIGHT") {
@@ -220,59 +221,85 @@ function EmptySlot({
   );
 }
 
+function hasDeeperNodes(node: TreeNode, depth: number, maxDepth: number): boolean {
+  if (depth >= maxDepth) {
+    return node.left !== null || node.right !== null;
+  }
+  if (node.left && hasDeeperNodes(node.left, depth + 1, maxDepth)) return true;
+  if (node.right && hasDeeperNodes(node.right, depth + 1, maxDepth)) return true;
+  return false;
+}
+
 function BranchConnectors({ depth }: { depth: number }) {
-  const leftId = useId().replace(/:/g, "");
-  const rightId = useId().replace(/:/g, "");
+  const uid = useId().replace(/:/g, "");
+  const leftMarker = `tree-arrow-left-${uid}`;
+  const rightMarker = `tree-arrow-right-${uid}`;
   const strokeW = depth === 0 ? 2.5 : depth === 1 ? 2 : 1.5;
 
   return (
     <svg
       className="pointer-events-none mx-auto h-12 w-full min-w-[11rem] sm:min-w-[14rem]"
-      viewBox="0 0 360 56"
-      preserveAspectRatio="none"
+      viewBox="0 0 320 52"
+      preserveAspectRatio="xMidYMid meet"
       aria-hidden
     >
       <defs>
-        <linearGradient id={`lg-${leftId}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="rgb(14 165 233 / 0.7)" />
-          <stop offset="100%" stopColor="rgb(14 165 233 / 0.35)" />
-        </linearGradient>
-        <linearGradient id={`rg-${rightId}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="rgb(245 158 11 / 0.7)" />
-          <stop offset="100%" stopColor="rgb(245 158 11 / 0.35)" />
-        </linearGradient>
+        <marker
+          id={leftMarker}
+          markerWidth="7"
+          markerHeight="7"
+          refX="6"
+          refY="3.5"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <polygon points="0 0, 7 3.5, 0 7" fill="rgb(14 165 233)" />
+        </marker>
+        <marker
+          id={rightMarker}
+          markerWidth="7"
+          markerHeight="7"
+          refX="6"
+          refY="3.5"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <polygon points="0 0, 7 3.5, 0 7" fill="rgb(245 158 11)" />
+        </marker>
       </defs>
       {/* trunk */}
       <path
-        d="M 180 0 L 180 18"
+        d="M 160 0 L 160 14"
         fill="none"
-        stroke="rgb(34 120 80 / 0.45)"
+        stroke="rgb(34 120 80 / 0.5)"
         strokeWidth={strokeW}
         strokeLinecap="round"
       />
       {/* horizontal branch */}
       <path
-        d="M 72 18 Q 180 18 288 18"
+        d="M 56 14 L 264 14"
         fill="none"
-        stroke="rgb(34 120 80 / 0.35)"
+        stroke="rgb(34 120 80 / 0.45)"
         strokeWidth={strokeW}
         strokeLinecap="round"
       />
-      {/* left curved branch */}
+      {/* left branch with arrow */}
       <path
-        d="M 72 18 C 72 28, 72 38, 72 52"
+        d="M 56 14 L 56 48"
         fill="none"
-        stroke={`url(#lg-${leftId})`}
+        stroke="rgb(14 165 233 / 0.75)"
         strokeWidth={strokeW}
         strokeLinecap="round"
+        markerEnd={`url(#${leftMarker})`}
       />
-      {/* right curved branch */}
+      {/* right branch with arrow */}
       <path
-        d="M 288 18 C 288 28, 288 38, 288 52"
+        d="M 264 14 L 264 48"
         fill="none"
-        stroke={`url(#rg-${rightId})`}
+        stroke="rgb(245 158 11 / 0.75)"
         strokeWidth={strokeW}
         strokeLinecap="round"
+        markerEnd={`url(#${rightMarker})`}
       />
     </svg>
   );
@@ -284,6 +311,7 @@ function TreeBranch({
   sponsorCode,
   viewerId,
   side,
+  maxVisibleDepth,
   onFocusMember,
 }: {
   node: TreeNode;
@@ -291,9 +319,10 @@ function TreeBranch({
   sponsorCode: string;
   viewerId?: string;
   side?: "LEFT" | "RIGHT";
+  maxVisibleDepth: number;
   onFocusMember?: (memberId: string) => void;
 }) {
-  const showChildren = depth < MAX_DEPTH;
+  const showChildren = depth < maxVisibleDepth;
   const canFocus = Boolean(onFocusMember && depth > 0);
 
   return (
@@ -323,6 +352,7 @@ function TreeBranch({
                   sponsorCode={sponsorCode}
                   viewerId={viewerId}
                   side="LEFT"
+                  maxVisibleDepth={maxVisibleDepth}
                   onFocusMember={onFocusMember}
                 />
               ) : (
@@ -337,6 +367,7 @@ function TreeBranch({
                   sponsorCode={sponsorCode}
                   viewerId={viewerId}
                   side="RIGHT"
+                  maxVisibleDepth={maxVisibleDepth}
                   onFocusMember={onFocusMember}
                 />
               ) : (
@@ -460,6 +491,14 @@ export function PairingDiagram({
   const { member } = useAuth();
   const sponsorCode = member?.memberCode ?? tree.memberCode;
   const showReset = Boolean(onResetFocus && focusId && viewerId && focusId !== viewerId);
+  const [showFullTree, setShowFullTree] = useState(false);
+
+  useEffect(() => {
+    setShowFullTree(false);
+  }, [focusId, tree.id]);
+
+  const maxVisibleDepth = showFullTree ? MAX_DEPTH : DEFAULT_VISIBLE_DEPTH;
+  const canExpand = hasDeeperNodes(tree, 0, DEFAULT_VISIBLE_DEPTH);
 
   const leftCarry = volume.carryLeft + volume.leftCount - volume.pairsMatched;
   const rightCarry = volume.carryRight + volume.rightCount - volume.pairsMatched;
@@ -509,9 +548,32 @@ export function PairingDiagram({
           depth={0}
           sponsorCode={sponsorCode}
           viewerId={viewerId}
+          maxVisibleDepth={maxVisibleDepth}
           onFocusMember={onFocusMember}
         />
       </TreeScaleViewport>
+
+      {canExpand ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+            onClick={() => setShowFullTree((open) => !open)}
+          >
+            {showFullTree ? (
+              <>
+                <ChevronUp className="size-4" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="size-4" />
+                More — show full tree
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
 
       {!treeOnly ? (
         <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
