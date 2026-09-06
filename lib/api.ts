@@ -1,4 +1,5 @@
 export const TOKEN_KEY = "rhc_token";
+const LEGACY_TOKEN_KEY = "rhc_token";
 
 function cookieToken(): string | null {
   if (typeof document === "undefined") return null;
@@ -6,20 +7,28 @@ function cookieToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+/** Session-only token — cleared when the browser tab/window closes. */
 export function getToken() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY) ?? cookieToken();
+  return sessionStorage.getItem(TOKEN_KEY) ?? cookieToken();
 }
 
 export function persistToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${TOKEN_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`;
+  document.cookie = `${TOKEN_KEY}=${encodeURIComponent(token)}; Path=/; SameSite=Lax${secure}`;
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
   document.cookie = `${TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
+/** Drop any old persistent login from before session-only auth. */
+export function clearLegacyPersistentToken() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function fieldValue(form: HTMLFormElement, name: string): string {

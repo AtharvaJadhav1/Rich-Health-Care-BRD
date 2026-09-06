@@ -49,7 +49,14 @@ function Inner() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
+    <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      <div className="text-center sm:text-left">
+        <p className="section-eyebrow">Genealogy</p>
+        <h1 className="font-heading mt-1 text-2xl font-semibold sm:text-3xl">Binary tree</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your network — tap any member to explore their downline, or use + on empty slots to register.
+        </p>
+      </div>
       <PairingDiagram
         variant="tree-only"
         tree={tree.tree}

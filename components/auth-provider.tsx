@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, clearToken, getToken, persistToken } from "@/lib/api";
+import { api, clearLegacyPersistentToken, clearToken, getToken, persistToken } from "@/lib/api";
 
 export type Member = {
   id: string;
@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    clearLegacyPersistentToken();
     const stored = getToken();
     if (!stored) {
       setLoading(false);

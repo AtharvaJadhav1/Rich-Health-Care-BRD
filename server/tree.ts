@@ -133,6 +133,7 @@ export type TreeNode = {
   position: string | null;
   status: string;
   rank: string | null;
+  photoUrl: string | null;
   left: TreeNode | null;
   right: TreeNode | null;
 };
@@ -205,6 +206,7 @@ export async function fetchSubtree(rootId: string, depth = 3): Promise<TreeNode 
       position: node.position,
       status: displayStatus,
       rank: node.rank,
+      photoUrl: node.photoUrl,
       left: leftChild && remaining > 0 ? await walk(leftChild.id, remaining - 1) : null,
       right: rightChild && remaining > 0 ? await walk(rightChild.id, remaining - 1) : null,
     };

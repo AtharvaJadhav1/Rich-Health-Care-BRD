@@ -24,7 +24,7 @@ export function issuePassword() {
 const JWT_SECRET = process.env.JWT_SECRET ?? "rich-health-care-dev-secret";
 
 export function signToken(user: AuthUser) {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign(user, JWT_SECRET, { expiresIn: "12h" });
 }
 
 export function readToken(header?: string): AuthUser | null {
