@@ -48,7 +48,7 @@ export default function LoginPage() {
     <PageShell narrow>
       <PageHero
         title="Login"
-        description="Use your Member ID or 10-digit mobile number and password. For security, you are signed out when you close the browser."
+        description="Use your Member ID or 10-digit mobile number and password. You must sign in each time you open or return to the site."
       />
       <Card>
         <CardHeader>

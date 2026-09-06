@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, clearLegacyPersistentToken, clearToken, getToken, persistToken } from "@/lib/api";
+import { api, clearLegacyPersistentToken, clearToken, persistToken } from "@/lib/api";
 
 export type Member = {
   id: string;
@@ -59,6 +59,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const sessionRef = useRef(0);
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = token;
+
+  function wipeSession() {
+    clearToken();
+    setToken(null);
+    setMember(null);
+  }
 
   async function loadFromToken(nextToken: string, session: number) {
     const data = await api<{ member: Member }>("/member/me", { token: nextToken });
@@ -68,24 +76,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     clearLegacyPersistentToken();
-    const stored = getToken();
-    if (!stored) {
-      setLoading(false);
-      return;
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    function onPageHide() {
+      wipeSession();
     }
-    const session = ++sessionRef.current;
-    setToken(stored);
-    loadFromToken(stored, session)
-      .catch(() => {
-        if (session !== sessionRef.current) return;
-        clearToken();
-        setToken(null);
-        setMember(null);
-      })
-      .finally(() => {
-        if (session !== sessionRef.current) return;
-        setLoading(false);
-      });
+
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) {
+        wipeSession();
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        wipeSession();
+      }
+    }
+
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   const value = useMemo<AuthState>(
@@ -121,14 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { member: data.member, credentials: data.credentials };
       },
       logout() {
-        clearToken();
-        setToken(null);
-        setMember(null);
+        wipeSession();
       },
       async refresh() {
-        const stored = getToken();
-        if (!stored) return;
-        await loadFromToken(stored, sessionRef.current);
+        const activeToken = tokenRef.current;
+        if (!activeToken) return;
+        await loadFromToken(activeToken, sessionRef.current);
       },
     }),
     [token, member, loading],
